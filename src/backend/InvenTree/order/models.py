@@ -272,7 +272,7 @@ class ReturnOrderReportContext(report.mixins.BaseReportContext, TypedDict):
     customer: Optional[Company]
 
 
-class TransferOrderReportContext(report.mixins.BaseReportContext, TypedDict):
+class TransferOrderReportContext(BaseOrderReportContext, TypedDict):
     """Context for the transfer order model.
 
     Attributes:
@@ -300,6 +300,7 @@ class Order(
     InvenTree.models.InvenTreeAttachmentMixin,
     InvenTree.models.InvenTreeBarcodeMixin,
     InvenTree.models.InvenTreeNotesMixin,
+    InvenTree.models.InvenTreeTagsMixin,
     report.mixins.InvenTreeReportMixin,
     InvenTree.models.MetadataMixin,
     InvenTree.models.ReferenceIndexingMixin,
@@ -589,6 +590,21 @@ class Order(
         """Return the Address associated with this order."""
         return self.address or self.company.primary_address
 
+    @property
+    def status_text(self):
+        """Return the text representation of the current status. This will consider any custom status."""
+        if self.get_custom_status() is not None:
+            from generic.states.custom import (
+                get_logical_value as get_custom_state_logical_value,
+            )
+
+            custom_status = get_custom_state_logical_value(
+                self.get_custom_status(), model=self._meta.model_name
+            )
+            return custom_status.label
+        else:
+            return self.status_class.label(self.get_status())
+
     @classmethod
     def get_status_class(cls):
         """Return the enumeration class which represents the 'status' field for this model."""
@@ -623,7 +639,8 @@ class PurchaseOrder(TotalPriceMixin, Order):
     def report_context(self) -> PurchaseOrderReportContext:
         """Return report context data for this PurchaseOrder."""
         return_ctx = super().report_context()
-        return_ctx.update({'supplier': self.supplier})
+
+        return_ctx.update({'supplier': self.supplier})  # ty:ignore[invalid-key]
         return return_ctx
 
     def get_absolute_url(self) -> str:
@@ -690,11 +707,6 @@ class PurchaseOrder(TotalPriceMixin, Order):
         verbose_name=_('Status'),
         help_text=_('Purchase order status'),
     )
-
-    @property
-    def status_text(self):
-        """Return the text representation of the status field."""
-        return PurchaseOrderStatus.text(self.status)
 
     supplier = models.ForeignKey(
         Company,
@@ -1190,6 +1202,10 @@ class PurchaseOrder(TotalPriceMixin, Order):
 
                 for item in new_items:
                     item.set_status(status, custom_values=custom_stock_status_values)
+                    # run validation for serialized items plugin.validate_batch_code
+                    item.validate_batch_code()
+                    # run validation for serialized items plugin.validate_model_instance
+                    item.run_plugin_validation()
                     stock_items.append(item)
 
             else:
@@ -1212,6 +1228,13 @@ class PurchaseOrder(TotalPriceMixin, Order):
 
         # Bulk create new stock items
         if len(bulk_create_items) > 0:
+            # bulk_create() bypasses save()/clean() methods, so manual validation is required for each item
+            for item in bulk_create_items:
+                # run validation for items plugin.validate_batch_code
+                item.validate_batch_code()
+                # run validation for items plugin.validate_model_instance
+                item.run_plugin_validation()
+
             stock.models.StockItem.objects.bulk_create(
                 bulk_create_items, batch_size=250
             )
@@ -1350,7 +1373,8 @@ class SalesOrder(TotalPriceMixin, Order):
     def report_context(self) -> SalesOrderReportContext:
         """Generate report context data for this SalesOrder."""
         return_ctx = super().report_context()
-        return_ctx.update({'customer': self.customer})
+
+        return_ctx.update({'customer': self.customer})  # ty:ignore[invalid-key]
         return return_ctx
 
     def get_absolute_url(self) -> str:
@@ -1430,11 +1454,6 @@ class SalesOrder(TotalPriceMixin, Order):
         verbose_name=_('Status'),
         help_text=_('Sales order status'),
     )
-
-    @property
-    def status_text(self) -> str:
-        """Return the text representation of the status field."""
-        return SalesOrderStatus.text(self.status)
 
     customer_reference = models.CharField(
         max_length=64,
@@ -2465,6 +2484,7 @@ class SalesOrderShipment(
     InvenTree.models.InvenTreeParameterMixin,
     InvenTree.models.InvenTreeAttachmentMixin,
     InvenTree.models.InvenTreeBarcodeMixin,
+    InvenTree.models.InvenTreeTagsMixin,
     InvenTree.models.InvenTreeNotesMixin,
     report.mixins.InvenTreeReportMixin,
     InvenTree.models.MetadataMixin,
@@ -2913,7 +2933,8 @@ class ReturnOrder(TotalPriceMixin, Order):
     def report_context(self) -> ReturnOrderReportContext:
         """Generate report context data for this ReturnOrder."""
         return_ctx = super().report_context()
-        return_ctx.update({'customer': self.customer})
+
+        return_ctx.update({'customer': self.customer})  # ty:ignore[invalid-key]
         return return_ctx
 
     def get_absolute_url(self):

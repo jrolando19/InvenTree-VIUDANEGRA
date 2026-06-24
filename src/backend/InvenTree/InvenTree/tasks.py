@@ -282,40 +282,31 @@ def offload_task(
             # function was passed - use that
             _func = taskname
         else:
-            # Split path
+            # Split on the last dot: everything before is the module path,
+            # everything after is the function name. rsplit handles any depth
+            # (e.g. 'app.module.func' or 'app.sub.module.func').
             try:
-                app, mod, func = taskname.split('.')
-                app_mod = app + '.' + mod
+                module_path, func_name = taskname.rsplit('.', 1)
             except ValueError:
                 raise_warning(
                     f"WARNING: '{taskname}' not started - Malformed function path"
                 )
                 return False
 
-            # Import module from app
             try:
-                _mod = importlib.import_module(app_mod)
+                _mod = importlib.import_module(module_path)
             except ModuleNotFoundError:
                 log_error('offload_task', scope='worker')
                 raise_warning(
-                    f"WARNING: '{taskname}' not started - No module named '{app_mod}'"
+                    f"WARNING: '{taskname}' not started - No module named '{module_path}'"
                 )
                 return False
 
-            # Retrieve function
-            try:
-                _func = getattr(_mod, func)
-            except AttributeError:  # pragma: no cover
-                # getattr does not work for local import
-                _func = None
-
-            try:
-                if not _func:
-                    _func = eval(func)  # pragma: no cover
-            except NameError:
+            _func = getattr(_mod, func_name, None)
+            if _func is None:
                 log_error('offload_task', scope='worker')
                 raise_warning(
-                    f"WARNING: '{taskname}' not started - No function named '{func}'"
+                    f"WARNING: '{taskname}' not started - No function named '{func_name}'"
                 )
                 return False
 
@@ -447,21 +438,30 @@ def scheduled_task(
 
 
 @tracer.start_as_current_span('heartbeat')
-@scheduled_task(ScheduledTask.MINUTES, 5)
+@scheduled_task(ScheduledTask.MINUTES, 1)
 def heartbeat():
-    """Simple task which runs at 5 minute intervals, so we can determine that the background worker is actually running.
-
-    (There is probably a less "hacky" way of achieving this)?
-    """
+    """Simple task which runs at 1 minute intervals, so we can determine that the background worker is actually running."""
     try:
         from django_q.models import OrmQ, Success
     except AppRegistryNotReady:  # pragma: no cover
         logger.info('Could not perform heartbeat task - App registry not ready')
         return
 
-    threshold = timezone.now() - timedelta(minutes=30)
+    # Write a timestamp file so that health checks can verify worker liveness
+    # without needing to start a full Django process.
+    import tempfile
+    from pathlib import Path
 
-    # Delete heartbeat results more than half an hour old,
+    try:
+        Path(tempfile.gettempdir()).joinpath('inventree_worker_heartbeat').write_text(
+            str(timezone.now().timestamp())
+        )
+    except Exception:
+        pass
+
+    threshold = timezone.now() - timedelta(minutes=15)
+
+    # Delete heartbeat results more than 15 minutes old,
     # otherwise they just create extra noise
     heartbeats = Success.objects.filter(
         func='InvenTree.tasks.heartbeat', started__lte=threshold

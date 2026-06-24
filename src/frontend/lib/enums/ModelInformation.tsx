@@ -10,6 +10,7 @@ export interface ModelInformationInterface {
   url_detail?: string;
   api_endpoint: ApiEndpoints;
   admin_url?: string;
+  pk_field?: string;
   supports_barcode?: boolean;
   icon: keyof InvenTreeIconType;
 }
@@ -117,8 +118,8 @@ export const ModelInformationDict: ModelDict = {
     icon: 'history'
   },
   build: {
-    label: () => t`Build`,
-    label_multiple: () => t`Builds`,
+    label: () => t`Build Order`,
+    label_multiple: () => t`Build Orders`,
     url_overview: '/manufacturing/index/buildorders/',
     url_detail: '/manufacturing/build-order/:pk/',
     api_endpoint: ApiEndpoints.build_order_list,
@@ -318,5 +319,11 @@ export const ModelInformationDict: ModelDict = {
     url_overview: '/settings/admin/errors',
     url_detail: '/settings/admin/errors/:pk/',
     icon: 'exclamation'
+  },
+  tag: {
+    label: () => t`Tag`,
+    label_multiple: () => t`Tags`,
+    api_endpoint: ApiEndpoints.tag_list,
+    icon: 'tag'
   }
 };

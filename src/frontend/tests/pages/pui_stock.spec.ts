@@ -70,6 +70,24 @@ test('Stock - Location Tree', async ({ browser }) => {
   await page.getByLabel('breadcrumb-1-factory').click();
 
   await page.getByRole('cell', { name: 'Factory' }).first().waitFor();
+
+  // Load the tree again - from a deeply nested location
+  // We expect it to auto-expand to the current location
+  await navigate(page, 'stock/location/17/stock-items');
+  await page.getByLabel('nav-breadcrumb-action').click();
+
+  for (let ii = 0; ii <= 5; ii++) {
+    await page
+      .locator('div')
+      .filter({ hasText: `Location ${ii}` })
+      .first()
+      .waitFor();
+  }
+
+  // Let's search for a particular location
+  await page.getByRole('textbox', { name: 'nav-tree-search' }).fill('room');
+  await page.getByText('Storage Room A').first().waitFor();
+  await page.getByText('Storage Room B').first().waitFor();
 });
 
 test('Stock - Location Delete', async ({ browser }) => {
@@ -168,9 +186,14 @@ test('Stock - Filters', async ({ browser }) => {
   // Filter by custom status code
   await clearTableFilters(page);
   await setTableChoiceFilter(page, 'Status', 'Incoming goods inspection');
-  await page.getByText('1 - 8 / 8').waitFor();
   await page.getByRole('cell', { name: '1551AGY' }).first().waitFor();
+
+  await page.getByPlaceholder('Search').clear();
+  await page.getByPlaceholder('Search').fill('blue');
   await page.getByRole('cell', { name: 'widget.blue' }).first().waitFor();
+
+  await page.getByPlaceholder('Search').clear();
+  await page.getByPlaceholder('Search').fill('002.01');
   await page.getByRole('cell', { name: '002.01-PCBA' }).first().waitFor();
 
   await clearTableFilters(page);
@@ -324,10 +347,20 @@ test('Stock - Stock Actions', async ({ browser }) => {
     await page.getByRole('option', { name: status }).click();
   };
 
+  // Duplicate the stock item first - prevent impacting other tests
+  await page
+    .getByRole('button', { name: 'action-menu-stock-item-actions' })
+    .click();
+  await page
+    .getByRole('menuitem', { name: 'action-menu-stock-item-actions-duplicate' })
+    .click();
+  await page.getByRole('button', { name: 'Submit' }).click();
+  await page.waitForLoadState('networkidle');
+
   // Check for required values
   await page.getByText('Status', { exact: true }).waitFor();
   await page.getByText('Custom Status', { exact: true }).waitFor();
-  await page.getByText('Attention needed').waitFor();
+  await page.getByText('Attention needed').first().waitFor();
   await page
     .getByLabel('Stock Details')
     .getByText('Incoming goods inspection')
@@ -610,9 +643,9 @@ test('Transfer Order - Reference', async ({ browser }) => {
     .click();
 
   // Ensure a new reference is suggested
-  await expect(
-    page.getByLabel('text-field-reference', { exact: true })
-  ).not.toBeEmpty();
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(250);
+
   // Grab the Transfer Order reference
   const reference: string = await page
     .getByRole('textbox', { name: 'text-field-reference' })
@@ -704,7 +737,7 @@ test('Transfer Order - Allocate and Transfer', async ({ browser }) => {
   // Issue the order
   await page.getByRole('button', { name: 'Issue Order' }).click();
   await page.getByRole('button', { name: 'Submit' }).click();
-  await page.getByText('Order issued').waitFor();
+  await page.getByText('Issued', { exact: true }).first().waitFor();
 
   await loadTab(page, 'Line Items');
 

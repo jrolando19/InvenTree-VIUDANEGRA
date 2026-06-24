@@ -33,6 +33,7 @@ from generic.states.fields import InvenTreeCustomStatusSerializerMixin
 from importer.registry import register_importer
 from InvenTree.mixins import DataImportExportSerializerMixin
 from InvenTree.serializers import (
+    CustomStatusSerializerMixin,
     InvenTreeCurrencySerializer,
     InvenTreeDecimalField,
     OptionalField,
@@ -308,10 +309,12 @@ class StockItemTestResultSerializer(
 
 @register_importer()
 class StockItemSerializer(
+    CustomStatusSerializerMixin,
     InvenTree.serializers.FilterableSerializerMixin,
     DataImportExportSerializerMixin,
     InvenTreeCustomStatusSerializerMixin,
-    InvenTree.serializers.InvenTreeTagModelSerializer,
+    InvenTree.serializers.InvenTreeTaggitSerializer,
+    InvenTree.serializers.InvenTreeModelSerializer,
 ):
     """Serializer for a StockItem.
 
@@ -564,10 +567,6 @@ class StockItemSerializer(
         queryset = queryset.annotate(child_items=SubqueryCount('children'))
 
         return queryset
-
-    status_text = serializers.CharField(
-        source='get_status_display', read_only=True, label=_('Status')
-    )
 
     SKU = serializers.CharField(
         source='supplier_part.SKU',
@@ -1161,7 +1160,18 @@ class LocationTreeSerializer(InvenTree.serializers.InvenTreeModelSerializer):
         """Metaclass options."""
 
         model = StockLocation
-        fields = ['pk', 'name', 'parent', 'icon', 'structural', 'sublocations']
+        fields = [
+            'pk',
+            'name',
+            'description',
+            'pathstring',
+            'parent',
+            'tree_id',
+            'level',
+            'icon',
+            'structural',
+            'sublocations',
+        ]
 
     sublocations = serializers.IntegerField(label=_('Sublocations'), read_only=True)
 
@@ -1196,7 +1206,8 @@ class LocationDeleteSerializer(serializers.Serializer):
 class LocationSerializer(
     InvenTree.serializers.FilterableSerializerMixin,
     DataImportExportSerializerMixin,
-    InvenTree.serializers.InvenTreeTagModelSerializer,
+    InvenTree.serializers.InvenTreeTaggitSerializer,
+    InvenTree.serializers.InvenTreeModelSerializer,
 ):
     """Detailed information about a stock location."""
 

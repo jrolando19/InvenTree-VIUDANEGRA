@@ -11,6 +11,7 @@ import {
   Stack,
   Text
 } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import {
   IconBookmarks,
   IconBuilding,
@@ -40,6 +41,7 @@ import { type ReactNode, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Select from 'react-select';
 
+import TagsList from '@lib/components/TagsList';
 import { ApiEndpoints } from '@lib/enums/ApiEndpoints';
 import { ModelType } from '@lib/enums/ModelType';
 import { UserRoles } from '@lib/enums/Roles';
@@ -189,7 +191,8 @@ export default function PartDetail() {
     endpoint: ApiEndpoints.part_list,
     pk: id,
     params: {
-      path_detail: true
+      path_detail: true,
+      tags: true
     },
     refetchOnMount: true
   });
@@ -611,6 +614,7 @@ export default function PartDetail() {
               <DetailsTable fields={tl} item={data} />
             </Grid.Col>
           </Grid>
+          <TagsList tags={part.tags} />
           {enableRevisionSelection && (
             <Paper p='sm' withBorder>
               <Stack gap='xs'>
@@ -997,6 +1001,7 @@ export default function PartDetail() {
     pk: part.pk,
     title: t`Edit Part`,
     fields: partFields,
+    queryParams: new URLSearchParams({ tags: 'true' }),
     onFormSuccess: refreshInstance
   });
 
@@ -1147,6 +1152,7 @@ export default function PartDetail() {
           {user.hasViewRole(UserRoles.part_category) && (
             <NavigationTree
               title={t`Part Categories`}
+              childIdentifier='subcategories'
               modelType={ModelType.partcategory}
               endpoint={ApiEndpoints.category_tree}
               opened={treeOpen}
@@ -1165,11 +1171,25 @@ export default function PartDetail() {
                   variant='transparent'
                   disabled={!user.hasChangeRole(UserRoles.part)}
                   onClick={() => {
+                    const locking = !part.locked;
                     api
                       .patch(apiUrl(ApiEndpoints.part_list, part.pk), {
-                        locked: !part.locked
+                        locked: locking
                       })
-                      .then(refreshInstance);
+                      .then(() => {
+                        notifications.hide('part-lock');
+                        notifications.show({
+                          id: 'part-lock',
+                          message: locking ? t`Part locked` : t`Part unlocked`,
+                          color: 'green',
+                          icon: locking ? (
+                            <IconLock size='1rem' />
+                          ) : (
+                            <IconLockOpen size='1rem' />
+                          )
+                        });
+                        refreshInstance();
+                      });
                   }}
                 >
                   {part?.locked ? <IconLock /> : <IconLockOpen />}

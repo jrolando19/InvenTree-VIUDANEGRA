@@ -1,8 +1,9 @@
 import type { ApiFormFieldSet } from '@lib/types/Forms';
 import { t } from '@lingui/core/macro';
 import { IconBuildingStore, IconCopy, IconPackages } from '@tabler/icons-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useGlobalSettingsState } from '../states/SettingsStates';
+import { TagsField } from './CommonFields';
 
 /**
  * Construct a set of fields for creating / editing a Part instance
@@ -22,6 +23,12 @@ export function usePartFields({
   const [purchaseable, setPurchaseable] = useState<boolean | undefined>(
     undefined
   );
+
+  // Set the initial state for the tracked fields based on the global settings
+  useEffect(() => {
+    setVirtual(globalSettings.isSet('PART_VIRTUAL'));
+    setPurchaseable(globalSettings.isSet('PART_PURCHASEABLE'));
+  }, [partId, create]);
 
   return useMemo(() => {
     const fields: ApiFormFieldSet = {
@@ -48,6 +55,7 @@ export function usePartFields({
         }
       },
       keywords: {},
+      tags: TagsField({}),
       units: {},
       link: {},
       default_location: {

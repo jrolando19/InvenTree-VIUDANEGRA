@@ -31,11 +31,13 @@ from importer.registry import register_importer
 from InvenTree.helpers import extract_serial_numbers, hash_barcode, normalize, str2bool
 from InvenTree.mixins import DataImportExportSerializerMixin
 from InvenTree.serializers import (
+    CustomStatusSerializerMixin,
     FilterableSerializerMixin,
     InvenTreeCurrencySerializer,
     InvenTreeDecimalField,
     InvenTreeModelSerializer,
     InvenTreeMoneySerializer,
+    InvenTreeTaggitSerializer,
     NotesFieldMixin,
     OptionalField,
 )
@@ -100,7 +102,11 @@ class DuplicateOrderSerializer(serializers.Serializer):
 
 
 class AbstractOrderSerializer(
-    DataImportExportSerializerMixin, FilterableSerializerMixin, serializers.Serializer
+    CustomStatusSerializerMixin,
+    DataImportExportSerializerMixin,
+    InvenTreeTaggitSerializer,
+    FilterableSerializerMixin,
+    serializers.Serializer,
 ):
     """Abstract serializer class which provides fields common to all order types."""
 
@@ -118,11 +124,16 @@ class AbstractOrderSerializer(
         read_only=True, allow_null=True, label=_('Completed Lines')
     )
 
-    # Human-readable status text (read-only)
-    status_text = serializers.CharField(source='get_status_display', read_only=True)
-
     # status field cannot be set directly
     status = serializers.IntegerField(read_only=True, label=_('Order Status'))
+
+    # can be set directly, but must be valid for the current order status
+    status_custom_key = serializers.IntegerField(
+        label=_('Custom Status Key'),
+        help_text=_('Update order status to a custom value for this logical value'),
+        allow_null=True,
+        default=None,
+    )
 
     # Reference string is *required*
     reference = serializers.CharField(required=True)
@@ -171,6 +182,8 @@ class AbstractOrderSerializer(
 
     parameters = common.filters.enable_parameters_filter()
 
+    tags = common.filters.enable_tags_filter()
+
     # Boolean field indicating if this order is overdue (Note: must be annotated)
     overdue = serializers.BooleanField(read_only=True, allow_null=True)
 
@@ -193,6 +206,31 @@ class AbstractOrderSerializer(
         """Custom validation for the reference field."""
         self.Meta.model.validate_reference_field(reference)
         return reference
+
+    def validate_status_custom_key(self, value):
+        """Validate the status_custom_key field.
+
+        Ensure the custom status key is valid for the logical order status.
+        """
+        if value is None:
+            return value
+
+        from generic.states.custom import get_logical_value
+
+        if not isinstance(value, int):
+            raise ValidationError(_('Custom status key must be an integer'))
+
+        try:
+            custom_status = get_logical_value(
+                value, model=self.Meta.model._meta.model_name
+            )
+        except:
+            raise ValidationError(_('Invalid custom status key'))
+
+        if custom_status.logical_key is not self.instance.status:
+            raise ValidationError(_('Invalid custom status key for this order status'))
+
+        return value
 
     @staticmethod
     def annotate_queryset(queryset):
@@ -235,6 +273,7 @@ class AbstractOrderSerializer(
             'project_code_label',
             'responsible_detail',
             'parameters',
+            'tags',
             *extra_fields,
         ]
 
@@ -1064,6 +1103,7 @@ class SalesOrderSerializer(
     TotalPriceMixin,
     InvenTreeCustomStatusSerializerMixin,
     AbstractOrderSerializer,
+    InvenTreeTaggitSerializer,
     InvenTreeModelSerializer,
 ):
     """Serializer for the SalesOrder model class."""
@@ -1083,6 +1123,7 @@ class SalesOrderSerializer(
             'completed_shipments_count',
             'allocated_lines',
             'updated_at',
+            'tags',
         ])
         read_only_fields = ['status', 'creation_date', 'shipment_date', 'updated_at']
         extra_kwargs = {'order_currency': {'required': False}}
@@ -1163,6 +1204,8 @@ class SalesOrderSerializer(
     allocated_lines = serializers.IntegerField(
         read_only=True, allow_null=True, label=_('Allocated Lines')
     )
+
+    tags = common.filters.enable_tags_filter()
 
 
 class SalesOrderIssueSerializer(OrderAdjustSerializer):
@@ -1362,6 +1405,7 @@ class SalesOrderLineItemSerializer(
 class SalesOrderShipmentSerializer(
     DataImportExportSerializerMixin,
     FilterableSerializerMixin,
+    InvenTreeTaggitSerializer,
     NotesFieldMixin,
     InvenTreeModelSerializer,
 ):
@@ -1391,6 +1435,7 @@ class SalesOrderShipmentSerializer(
             'customer_detail',
             'order_detail',
             'shipment_address_detail',
+            'tags',
         ]
 
     @staticmethod
@@ -1459,6 +1504,8 @@ class SalesOrderShipmentSerializer(
     )
 
     parameters = common.filters.enable_parameters_filter()
+
+    tags = common.filters.enable_tags_filter()
 
 
 class SalesOrderAllocationSerializer(

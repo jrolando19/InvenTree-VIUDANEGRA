@@ -6,6 +6,7 @@ import json
 from datetime import date, datetime, timedelta
 from typing import Optional
 
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
@@ -16,7 +17,7 @@ from icalendar import Calendar
 from rest_framework import status
 
 from common.currency import currency_codes
-from common.models import InvenTreeSetting
+from common.models import InvenTreeCustomUserStateModel, InvenTreeSetting
 from common.settings import set_global_setting
 from company.models import Company, SupplierPart, SupplierPriceBreak
 from InvenTree.unit_test import InvenTreeAPITestCase
@@ -239,6 +240,77 @@ class PurchaseOrderTest(OrderTest):
 
         self.assertEqual(data['pk'], 1)
         self.assertEqual(data['description'], 'Ordering some screws')
+
+    def test_po_status_custom_key_options(self):
+        """Test that status_custom_key is exposed as writable in options."""
+        self.assignRole('purchase_order.add')
+
+        response = self.options(self.LIST_URL, expected_code=200)
+        post = response.data['actions']['POST']
+
+        self.assertIn('status_custom_key', post)
+        self.assertEqual(post['status_custom_key']['required'], False)
+        self.assertEqual(post['status_custom_key']['read_only'], False)
+
+    def test_po_status_custom_key_patch_valid(self):
+        """Test patching a valid custom status key for the current PO status."""
+        self.assignRole('purchase_order.change')
+
+        po = models.PurchaseOrder.objects.get(pk=1)
+        self.assertEqual(po.status, PurchaseOrderStatus.PENDING.value)
+
+        custom_status = InvenTreeCustomUserStateModel.objects.create(
+            key=901,
+            name='PO Pending Custom',
+            label='PO Pending Custom',
+            color='secondary',
+            logical_key=PurchaseOrderStatus.PENDING.value,
+            model=ContentType.objects.get_for_model(models.PurchaseOrder),
+            reference_status='PurchaseOrderStatus',
+        )
+
+        url = reverse('api-po-detail', kwargs={'pk': po.pk})
+        response = self.patch(
+            url, {'status_custom_key': custom_status.key}, expected_code=200
+        )
+
+        self.assertEqual(response.data['status'], PurchaseOrderStatus.PENDING.value)
+        self.assertEqual(response.data['status_custom_key'], custom_status.key)
+
+    def test_po_status_custom_key_patch_invalid(self):
+        """Test patching an invalid custom status key for a PO."""
+        self.assignRole('purchase_order.change')
+
+        po = models.PurchaseOrder.objects.get(pk=1)
+        url = reverse('api-po-detail', kwargs={'pk': po.pk})
+
+        response = self.patch(url, {'status_custom_key': 999999}, expected_code=400)
+
+        self.assertIn('status_custom_key', response.data)
+
+    def test_po_status_custom_key_patch_wrong_logical_status(self):
+        """Test patching a custom key mapped to a different logical status."""
+        self.assignRole('purchase_order.change')
+
+        po = models.PurchaseOrder.objects.get(pk=1)
+        self.assertEqual(po.status, PurchaseOrderStatus.PENDING.value)
+
+        custom_status = InvenTreeCustomUserStateModel.objects.create(
+            key=902,
+            name='PO Placed Custom',
+            label='PO Placed Custom',
+            color='secondary',
+            logical_key=PurchaseOrderStatus.PLACED.value,
+            model=ContentType.objects.get_for_model(models.PurchaseOrder),
+            reference_status='PurchaseOrderStatus',
+        )
+
+        url = reverse('api-po-detail', kwargs={'pk': po.pk})
+        response = self.patch(
+            url, {'status_custom_key': custom_status.key}, expected_code=400
+        )
+
+        self.assertIn('status_custom_key', response.data)
 
     def test_po_reference(self):
         """Test that a reference with a too big / small reference is handled correctly."""
@@ -737,6 +809,69 @@ class PurchaseOrderTest(OrderTest):
         )
         self.assertEqual(response.status_code, 200)
 
+    def test_po_custom_status_query_count(self):
+        """Test that listing PurchaseOrders with custom statuses does not cause N+1 queries.
+
+        Ensures that resolving the 'status_text' field for custom status values
+        is O(1) in database queries, not O(N) relative to the number of results.
+        """
+        from django.contrib.contenttypes.models import ContentType
+
+        po_content_type = ContentType.objects.get_for_model(models.PurchaseOrder)
+
+        # 10 custom status values - different keys, labels, and logical_keys
+        logical_keys = [
+            PurchaseOrderStatus.PENDING.value,
+            PurchaseOrderStatus.PLACED.value,
+            PurchaseOrderStatus.ON_HOLD.value,
+            PurchaseOrderStatus.COMPLETE.value,
+            PurchaseOrderStatus.CANCELLED.value,
+            PurchaseOrderStatus.LOST.value,
+            PurchaseOrderStatus.RETURNED.value,
+            PurchaseOrderStatus.PENDING.value,
+            PurchaseOrderStatus.PLACED.value,
+            PurchaseOrderStatus.ON_HOLD.value,
+        ]
+
+        custom_statuses = [
+            InvenTreeCustomUserStateModel.objects.create(
+                key=1000 + i,
+                name=f'PoCustomStatus{i}',
+                label=f'PO Custom Status Label {i}',
+                color='secondary',
+                logical_key=logical_keys[i],
+                model=po_content_type,
+                reference_status='PurchaseOrderStatus',
+            )
+            for i in range(10)
+        ]
+
+        # Create 100 purchase orders, cycling through the custom statuses
+        supplier = Company.objects.filter(is_supplier=True).first()
+        models.PurchaseOrder.objects.bulk_create([
+            models.PurchaseOrder(
+                supplier=supplier,
+                reference=f'PO-QTEST-{i}',
+                status=custom_statuses[i % 10].logical_key,
+                status_custom_key=custom_statuses[i % 10].key,
+            )
+            for i in range(100)
+        ])
+
+        # Query count must stay below the fixed threshold for all limit values.
+        # An N+1 bug would push limit=50 or limit=100 well over the threshold.
+        for limit in [1, 5, 10, 25, 50, 100]:
+            response = self.get(
+                self.LIST_URL,
+                data={'limit': limit},
+                expected_code=200,
+                max_query_count=50,
+            )
+
+            for result in response.data['results']:
+                self.assertIn('status_text', result)
+                self.assertIsNotNone(result['status_text'])
+
 
 class PurchaseOrderLineItemTest(OrderTest):
     """Unit tests for PurchaseOrderLineItems."""
@@ -771,7 +906,7 @@ class PurchaseOrderLineItemTest(OrderTest):
         # Try to delete a set of line items via their IDs
         self.delete(url, {'items': [1, 2]}, expected_code=200)
 
-        # We should have 2 less PurchaseOrderLineItems after deletign them
+        # We should have 2 less PurchaseOrderLineItems after deleting them
         self.assertEqual(models.PurchaseOrderLineItem.objects.count(), n - 2)
 
     def test_po_line_merge_pricing(self):
@@ -1395,19 +1530,21 @@ class SalesOrderTest(OrderTest):
     def test_so_list(self):
         """Test the SalesOrder list API endpoint."""
         # All orders
-        self.filter({}, 5)
+        self.filter({}, 6)
 
         # Filter by customer
         self.filter({'customer': 4}, 3)
-        self.filter({'customer': 5}, 2)
+        self.filter({'customer': 5}, 3)
 
         # Filter by outstanding
-        self.filter({'outstanding': True}, 3)
+        self.filter({'outstanding': True}, 4)
         self.filter({'outstanding': False}, 2)
 
         # Filter by status
-        self.filter({'status': SalesOrderStatus.PENDING.value}, 3)  # PENDING
-        self.filter({'status': SalesOrderStatus.SHIPPED.value}, 1)  # SHIPPED
+        self.filter({'status': SalesOrderStatus.PENDING.value}, 3)
+        self.filter({'status': SalesOrderStatus.SHIPPED.value}, 1)
+        self.filter({'status': SalesOrderStatus.COMPLETE.value}, 1)
+        self.filter({'status': SalesOrderStatus.CANCELLED.value}, 0)
         self.filter({'status': 99}, 0)  # Invalid
 
         # Filter by "reference"
@@ -1416,7 +1553,7 @@ class SalesOrderTest(OrderTest):
 
         # Filter by "assigned_to_me"
         self.filter({'assigned_to_me': 1}, 0)
-        self.filter({'assigned_to_me': 0}, 5)
+        self.filter({'assigned_to_me': 0}, 6)
 
     def test_total_price(self):
         """Unit tests for the 'total_price' field."""
@@ -1490,7 +1627,7 @@ class SalesOrderTest(OrderTest):
     def test_overdue(self):
         """Test "overdue" status."""
         self.filter({'overdue': True}, 0)
-        self.filter({'overdue': False}, 5)
+        self.filter({'overdue': False}, 6)
 
         for pk in [1, 2]:
             order = models.SalesOrder.objects.get(pk=pk)
@@ -1498,7 +1635,7 @@ class SalesOrderTest(OrderTest):
             order.save()
 
         self.filter({'overdue': True}, 2)
-        self.filter({'overdue': False}, 3)
+        self.filter({'overdue': False}, 4)
 
     def test_so_detail(self):
         """Test the SalesOrder detail endpoint."""
@@ -1884,6 +2021,63 @@ class SalesOrderTest(OrderTest):
         self.run_output_test(
             reverse('api-so-detail', kwargs={'pk': 1}), ['customer_detail']
         )
+
+    def test_so_custom_status_query_count(self):
+        """Test that listing SalesOrders with custom statuses does not cause N+1 queries.
+
+        Ensures that resolving the 'status_text' field for custom status values
+        is O(1) in database queries, not O(N) relative to the number of results.
+        """
+        so_content_type = ContentType.objects.get_for_model(models.SalesOrder)
+
+        logical_keys = [
+            SalesOrderStatus.PENDING.value,
+            SalesOrderStatus.IN_PROGRESS.value,
+            SalesOrderStatus.SHIPPED.value,
+            SalesOrderStatus.ON_HOLD.value,
+            SalesOrderStatus.COMPLETE.value,
+            SalesOrderStatus.CANCELLED.value,
+            SalesOrderStatus.PENDING.value,
+            SalesOrderStatus.IN_PROGRESS.value,
+            SalesOrderStatus.SHIPPED.value,
+            SalesOrderStatus.ON_HOLD.value,
+        ]
+
+        custom_statuses = [
+            InvenTreeCustomUserStateModel.objects.create(
+                key=2000 + i,
+                name=f'SoCustomStatus{i}',
+                label=f'SO Custom Status Label {i}',
+                color='secondary',
+                logical_key=logical_keys[i],
+                model=so_content_type,
+                reference_status='SalesOrderStatus',
+            )
+            for i in range(10)
+        ]
+
+        customer = Company.objects.filter(is_customer=True).first()
+        models.SalesOrder.objects.bulk_create([
+            models.SalesOrder(
+                customer=customer,
+                reference=f'SO-QTEST-{i}',
+                status=custom_statuses[i % 10].logical_key,
+                status_custom_key=custom_statuses[i % 10].key,
+            )
+            for i in range(100)
+        ])
+
+        for limit in [1, 5, 10, 25, 50, 100]:
+            response = self.get(
+                self.LIST_URL,
+                data={'limit': limit},
+                expected_code=200,
+                max_query_count=50,
+            )
+
+            for result in response.data['results']:
+                self.assertIn('status_text', result)
+                self.assertIsNotNone(result['status_text'])
 
 
 class SalesOrderLineItemTest(OrderTest):
