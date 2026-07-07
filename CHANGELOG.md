@@ -9,9 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- [#12223](https://github.com/inventree/InvenTree/pull/12223) removes support for python 3.11 and stops providing packages for Debian 11 and Ubuntu 20.04.
+
 ### Added
 
+- [#12295](https://github.com/inventree/InvenTree/pull/12295) adds "consumable" field to the Part model and API endpoints
+- [#12250](https://github.com/inventree/InvenTree/pull/12250) adds "active" field to the ProjectCode model and API endpoints
+
 ### Changed
+
+- [#12274](https://github.com/inventree/InvenTree/pull/12274) fixes a bug in rendering the "table field" component in frontend forms. Any plugins which make use of the "table field" component in their forms may be affected by this change, and will need to update their form definitions accordingly.
 
 ### Removed
 
