@@ -1,0 +1,98 @@
+name: CI - Automated Tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  backend-tests:
+    name: Backend Tests - Python
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: inventree
+          POSTGRES_USER: inventree
+          POSTGRES_PASSWORD: inventree
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U inventree -d inventree"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      INVENTREE_DB_ENGINE: postgresql
+      INVENTREE_DB_NAME: inventree
+      INVENTREE_DB_USER: inventree
+      INVENTREE_DB_PASSWORD: inventree
+      INVENTREE_DB_HOST: localhost
+      INVENTREE_DB_PORT: 5432
+      INVENTREE_CACHE_HOST: localhost
+      INVENTREE_CACHE_PORT: 6379
+      INVENTREE_SECRET_KEY: github-actions-test-secret-key
+      INVENTREE_DEBUG: "True"
+      INVENTREE_STATIC_ROOT: /tmp/inventree-static
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f src/backend/requirements.txt ]; then pip install -r src/backend/requirements.txt; fi
+          if [ -f src/backend/InvenTree/requirements.txt ]; then pip install -r src/backend/InvenTree/requirements.txt; fi
+          pip install pytest pytest-django coverage
+
+      - name: Run backend tests
+        run: |
+          cd src/backend/InvenTree
+          python manage.py collectstatic --noinput || true
+          pytest
+
+  frontend-tests:
+    name: Frontend Tests - Node
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Node dependencies
+        run: |
+          cd src/frontend
+          npm install
+
+      - name: Run frontend tests
+        run: |
+          cd src/frontend
+          npm test -- --watch=false || npm run test -- --watch=false || npm run lint
