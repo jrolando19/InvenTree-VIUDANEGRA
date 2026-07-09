@@ -50,6 +50,7 @@ jobs:
       INVENTREE_SECRET_KEY: github-actions-test-secret-key
       INVENTREE_DEBUG: "True"
       INVENTREE_STATIC_ROOT: /tmp/inventree-static
+      INVENTREE_MEDIA_ROOT: /tmp/inventree-media
 
     steps:
       - name: Checkout repository
@@ -69,6 +70,8 @@ jobs:
 
       - name: Run backend tests
         run: |
+          mkdir -p "$INVENTREE_STATIC_ROOT"
+          mkdir -p "$INVENTREE_MEDIA_ROOT"
           python src/backend/InvenTree/manage.py collectstatic --noinput || true
           pytest src/backend/InvenTree
 
