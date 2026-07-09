@@ -75,6 +75,7 @@ jobs:
           mkdir -p "$INVENTREE_STATIC_ROOT"
           mkdir -p "$INVENTREE_MEDIA_ROOT"
           mkdir -p "$INVENTREE_BACKUP_DIR"
+          python src/backend/InvenTree/manage.py migrate --noinput
           python src/backend/InvenTree/manage.py collectstatic --noinput || true
           pytest src/backend/InvenTree
 
