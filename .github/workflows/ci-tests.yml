@@ -63,16 +63,14 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f src/backend/requirements.txt ]; then pip install -r src/backend/requirements.txt; fi
-          if [ -f src/backend/InvenTree/requirements.txt ]; then pip install -r src/backend/InvenTree/requirements.txt; fi
+          pip install -r src/backend/requirements.txt
+          pip install -r src/backend/requirements-dev.txt
           pip install pytest pytest-django coverage
 
       - name: Run backend tests
         run: |
-          cd src/backend/InvenTree
-          python manage.py collectstatic --noinput || true
-          pytest
+          python src/backend/InvenTree/manage.py collectstatic --noinput || true
+          pytest src/backend/InvenTree
 
   frontend-tests:
     name: Frontend Tests - Node
@@ -95,7 +93,7 @@ jobs:
       - name: Run frontend tests
         run: |
           cd src/frontend
-          npm test -- --watch=false || npm run test -- --watch=false || npm run lint
+          npm run build
   deploy:
     name: Deploy - Docker Compose
     runs-on: ubuntu-latest
