@@ -68,7 +68,7 @@ repos:
   hooks:
   - id: codespell
     args:
-    - --ignore-words-list=serr,comandos,utiliza,comando,accessible,responde
+    - --ignore-words-list=ser,serr,comandos,utiliza,comando,accessible,responde,accesible
     additional_dependencies:
       - tomli
     exclude: >
