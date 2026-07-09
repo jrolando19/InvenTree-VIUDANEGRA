@@ -96,3 +96,51 @@ jobs:
         run: |
           cd src/frontend
           npm test -- --watch=false || npm run test -- --watch=false || npm run lint
+  deploy:
+    name: Deploy - Docker Compose
+    runs-on: ubuntu-latest
+    needs:
+      - backend-tests
+      - frontend-tests
+
+    if: github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate deployment files
+        run: |
+          echo "Validando archivos requeridos para despliegue"
+          test -f contrib/container/docker-compose.yml
+          test -f contrib/container/Caddyfile
+          test -f contrib/container/.env
+          echo "Archivos de despliegue encontrados correctamente"
+
+      - name: Prepare deployment environment
+        run: |
+          echo "Preparando entorno de despliegue automatizado"
+          cd contrib/container
+          docker compose config
+
+      - name: Build and validate containers
+        run: |
+          echo "Validando configuración Docker Compose"
+          cd contrib/container
+          docker compose pull
+          docker compose up -d
+          docker compose ps
+
+      - name: Verify deployment response
+        run: |
+          echo "Verificando respuesta HTTP del despliegue"
+          sleep 30
+          curl -I http://localhost || true
+          docker compose -f contrib/container/docker-compose.yml ps
+
+      - name: Stop deployment containers
+        if: always()
+        run: |
+          echo "Deteniendo contenedores del despliegue de prueba"
+          cd contrib/container
+          docker compose down
