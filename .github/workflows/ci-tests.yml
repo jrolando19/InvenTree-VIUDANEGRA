@@ -51,6 +51,7 @@ jobs:
       INVENTREE_DEBUG: "True"
       INVENTREE_STATIC_ROOT: /tmp/inventree-static
       INVENTREE_MEDIA_ROOT: /tmp/inventree-media
+      INVENTREE_BACKUP_DIR: /tmp/inventree-backup
 
     steps:
       - name: Checkout repository
@@ -72,6 +73,7 @@ jobs:
         run: |
           mkdir -p "$INVENTREE_STATIC_ROOT"
           mkdir -p "$INVENTREE_MEDIA_ROOT"
+          mkdir -p "$INVENTREE_BACKUP_DIR"
           python src/backend/InvenTree/manage.py collectstatic --noinput || true
           pytest src/backend/InvenTree
 
