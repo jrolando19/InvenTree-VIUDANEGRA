@@ -8,7 +8,8 @@ const IS_CI = !!process.env.CI;
 // side -- on any fork, GITHUB_REPOSITORY differs and the upload is rejected
 // with a 403, failing the whole job for a reporter step that isn't essential
 // to the actual test results. Only enable it on the official repo.
-const IS_OFFICIAL_REPO = process.env.GITHUB_REPOSITORY === 'inventree/InvenTree';
+const IS_OFFICIAL_REPO =
+  process.env.GITHUB_REPOSITORY === 'inventree/InvenTree';
 
 /* We optionally spin-up services based on the testing mode:
  *
