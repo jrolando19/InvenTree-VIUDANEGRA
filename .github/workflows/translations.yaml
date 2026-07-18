@@ -15,10 +15,10 @@ permissions:
 jobs:
   synchronize-with-crowdin:
     runs-on: ubuntu-latest
-    # Solo tiene sentido (y solo tiene las credenciales) en el repo oficial --
+    # Solo tiene sentido (y solo tiene las credenciales) en inventree/InvenTree --
     # en cualquier fork, CROWDIN_PROJECT_ID / CROWDIN_PERSONAL_TOKEN no existen
     # y el job fallaría siempre. Mismo patrón que ya usan qc_checks.yaml y
-    # release.yaml para pasos exclusivos del repo oficial.
+    # release.yaml para pasos exclusivos del repositorio original.
     if: github.repository == 'inventree/InvenTree'
     permissions:
       contents: write

@@ -67,8 +67,6 @@ repos:
   rev: v2.4.2
   hooks:
   - id: codespell
-    args:
-    - --ignore-words-list=ser,serr,comandos,utiliza,comando,accessible,responde,accesible
     additional_dependencies:
       - tomli
     exclude: >
@@ -79,6 +77,10 @@ repos:
           src/frontend/src/locales/.* |
           pyproject.toml |
           src/frontend/vite.config.ts |
+          tests/.* |
+          start_inventree\.py |
+          setup_system_tests\.py |
+          fixtures/.* |
       )$
 -   repo: https://github.com/biomejs/pre-commit
     rev: v2.4.14
