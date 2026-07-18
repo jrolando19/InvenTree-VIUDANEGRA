@@ -1,0 +1,595 @@
+# ============================================================
+# InvenTree — Fixture base para Pruebas de Sistema
+# ============================================================
+# Cubre los datos mínimos requeridos por TODAS las suites:
+#   - inventree_test_suite.py                          (CPF-001 Login + CPF-002 Partes)
+#   - inventree_stock_test_suite.py                    (CPF-003 Stock + Transferencias)
+#   - inventree_categories_suppliers_test_suite.py      (CPF-006 Categorías + CPF-007 Proveedores)
+#   - inventree_po_bom_build_test_suite.py              (CPF-004 PO + CPF-005 BOM + CPF-008 Builds)
+#   - inventree_sales_returns_test_suite.py             (ST-008 SO + ST-009 RO)
+#   - inventree_permissions_traceability_test_suite.py  (ST-003 Permisos + ST-010 Trazabilidad + ST-012 Plugins)
+#   - inventree_golden_path_test_suite.py               (ST-013 Golden Path E2E)
+#
+# Es la ÚNICA fuente de verdad para estos datos: setup_system_tests.py
+# lo carga con `loaddata` en vez de recrear los registros a mano.
+#
+# Cargar manualmente con:
+#   python src/backend/InvenTree/manage.py loaddata fixtures/system_test_base.yaml
+# o (recomendado, incluye verificación):
+#   python setup_system_tests.py
+# ============================================================
+
+# ── Usuarios ──────────────────────────────────────────────────
+# admin / inventree            (superuser)
+# testviewer / viewer123       (sin permisos — ST-003 Permisos)
+- model: auth.user
+  pk: 1
+  fields:
+    password: "pbkdf2_sha256$1000000$xM8cqAxie6WmNxv00h7ELI$t0WzTCghl5sILRGN30B7WZ5PD5YSplWD22jNWCXGdpk="
+    last_login: null
+    is_superuser: true
+    username: "admin"
+    first_name: ""
+    last_name: ""
+    email: "admin@inventree.local"
+    is_staff: true
+    is_active: true
+    date_joined: "2024-01-01T00:00:00Z"
+    groups: []
+    user_permissions: []
+
+- model: auth.user
+  pk: 2
+  fields:
+    password: "pbkdf2_sha256$1000000$hZsj9GGsnsDzue3WwMP073$MXON4MRlye5JsLclWOuqBQI5l4jmdzniZqcxr6Elh5k="
+    last_login: null
+    is_superuser: false
+    username: "testviewer"
+    first_name: ""
+    last_name: ""
+    email: "viewer@inventree.local"
+    is_staff: false
+    is_active: true
+    date_joined: "2024-01-01T00:00:00Z"
+    groups: []
+    user_permissions: []
+
+# ── Categorías de partes ─────────────────────────────────────
+- model: part.partcategory
+  pk: 1
+  fields:
+    metadata: {}
+    name: "Electrónicos"
+    description: "Componentes electrónicos generales"
+    parent: null
+    pathstring: "Electrónicos"
+    default_location: null
+    structural: false
+    default_keywords: null
+    _icon: null
+    lft: 1
+    rght: 2
+    tree_id: 1
+    level: 0
+
+- model: part.partcategory
+  pk: 3
+  fields:
+    metadata: {}
+    name: "Ensambles"
+    description: "Módulos y ensambles de componentes"
+    parent: null
+    pathstring: "Ensambles"
+    default_location: null
+    structural: false
+    default_keywords: null
+    _icon: null
+    lft: 1
+    rght: 2
+    tree_id: 2
+    level: 0
+
+# ── Partes ────────────────────────────────────────────────────
+# PART_R = 1   → Resistencia 10k
+# PART_C = 2   → Capacitor 100uF
+# PART_L = 3   → LED Rojo
+# PART_PCB = 5 → PCB Sensor v1 (assembly con BOM)
+# PART_MOD = 10 → Módulo Ensamble Test (assembly sin BOM — Build Order tests)
+- model: part.part
+  pk: 1
+  fields:
+    metadata: {}
+    notes: null
+    barcode_data: ""
+    barcode_hash: ""
+    image: ""
+    name: "Resistencia 10k"
+    is_template: false
+    variant_of: null
+    description: "Resistencia 10 kΩ 1/4W 5%"
+    keywords: null
+    category: 1
+    IPN: null
+    revision: null
+    revision_of: null
+    link: null
+    default_location: null
+    default_expiry: 0
+    minimum_stock: "0.000000"
+    maximum_stock: "0.000000"
+    units: ""
+    assembly: false
+    component: true
+    trackable: false
+    testable: false
+    purchaseable: true
+    salable: false
+    active: true
+    locked: false
+    virtual: false
+    consumable: false
+    bom_validated: false
+    bom_checksum: ""
+    bom_checked_by: null
+    bom_checked_date: null
+    creation_date: "2024-01-01"
+    creation_user: null
+    responsible_owner: null
+    base_cost: "0.000000"
+    multiple: 1
+    lft: 1
+    rght: 2
+    tree_id: 4
+    level: 0
+
+- model: part.part
+  pk: 2
+  fields:
+    metadata: {}
+    notes: null
+    barcode_data: ""
+    barcode_hash: ""
+    image: ""
+    name: "Capacitor 100uF"
+    is_template: false
+    variant_of: null
+    description: "Capacitor electrolítico 100µF 25V"
+    keywords: null
+    category: 1
+    IPN: null
+    revision: null
+    revision_of: null
+    link: null
+    default_location: null
+    default_expiry: 0
+    minimum_stock: "0.000000"
+    maximum_stock: "0.000000"
+    units: ""
+    assembly: false
+    component: true
+    trackable: false
+    testable: false
+    purchaseable: true
+    salable: false
+    active: true
+    locked: false
+    virtual: false
+    consumable: false
+    bom_validated: false
+    bom_checksum: ""
+    bom_checked_by: null
+    bom_checked_date: null
+    creation_date: "2024-01-01"
+    creation_user: null
+    responsible_owner: null
+    base_cost: "0.000000"
+    multiple: 1
+    lft: 1
+    rght: 2
+    tree_id: 1
+    level: 0
+
+- model: part.part
+  pk: 3
+  fields:
+    metadata: {}
+    notes: null
+    barcode_data: ""
+    barcode_hash: ""
+    image: ""
+    name: "LED Rojo"
+    is_template: false
+    variant_of: null
+    description: "LED rojo 5mm 20mA"
+    keywords: null
+    category: 1
+    IPN: null
+    revision: null
+    revision_of: null
+    link: null
+    default_location: null
+    default_expiry: 0
+    minimum_stock: "0.000000"
+    maximum_stock: "0.000000"
+    units: ""
+    assembly: false
+    component: true
+    trackable: false
+    testable: false
+    purchaseable: true
+    salable: false
+    active: true
+    locked: false
+    virtual: false
+    consumable: false
+    bom_validated: false
+    bom_checksum: ""
+    bom_checked_by: null
+    bom_checked_date: null
+    creation_date: "2024-01-01"
+    creation_user: null
+    responsible_owner: null
+    base_cost: "0.000000"
+    multiple: 1
+    lft: 1
+    rght: 2
+    tree_id: 2
+    level: 0
+
+- model: part.part
+  pk: 5
+  fields:
+    metadata: {}
+    notes: null
+    barcode_data: ""
+    barcode_hash: ""
+    image: ""
+    name: "PCB Sensor v1"
+    is_template: false
+    variant_of: null
+    description: "Placa de circuito para módulo sensor"
+    keywords: null
+    category: 3
+    IPN: null
+    revision: null
+    revision_of: null
+    link: null
+    default_location: null
+    default_expiry: 0
+    minimum_stock: "0.000000"
+    maximum_stock: "0.000000"
+    units: ""
+    assembly: true
+    component: true
+    trackable: false
+    testable: false
+    purchaseable: false
+    salable: true
+    active: true
+    locked: false
+    virtual: false
+    consumable: false
+    bom_validated: false
+    bom_checksum: ""
+    bom_checked_by: null
+    bom_checked_date: null
+    creation_date: "2024-01-01"
+    creation_user: null
+    responsible_owner: null
+    base_cost: "0.000000"
+    multiple: 1
+    lft: 1
+    rght: 2
+    tree_id: 3
+    level: 0
+
+- model: part.part
+  pk: 10
+  fields:
+    metadata: {}
+    notes: null
+    barcode_data: ""
+    barcode_hash: ""
+    image: ""
+    name: "Módulo Ensamble Test"
+    is_template: false
+    variant_of: null
+    description: "Ensamble de prueba sin BOM — Build Order tests"
+    keywords: null
+    category: 3
+    IPN: null
+    revision: null
+    revision_of: null
+    link: null
+    default_location: null
+    default_expiry: 0
+    minimum_stock: "0.000000"
+    maximum_stock: "0.000000"
+    units: ""
+    assembly: true
+    component: true
+    trackable: false
+    testable: false
+    purchaseable: false
+    salable: true
+    active: true
+    locked: false
+    virtual: false
+    consumable: false
+    bom_validated: false
+    bom_checksum: ""
+    bom_checked_by: null
+    bom_checked_date: null
+    creation_date: "2024-01-01"
+    creation_user: null
+    responsible_owner: null
+    base_cost: "0.000000"
+    multiple: 1
+    lft: 1
+    rght: 2
+    tree_id: 5
+    level: 0
+
+# ── Ubicaciones de stock ──────────────────────────────────────
+# LOC_A = 1  → Almacén A
+# LOC_B = 2  → Almacén B
+# LOC_C = 3  → Almacén C
+# LOC_D = 4  → Cajón 1 (hijo de Almacén A)
+- model: stock.stocklocation
+  pk: 1
+  fields:
+    metadata: {}
+    name: "Almacén A"
+    description: "Almacén principal A"
+    parent: null
+    pathstring: "Almacén A"
+    barcode_data: ""
+    barcode_hash: ""
+    custom_icon: null
+    owner: null
+    structural: false
+    external: false
+    location_type: null
+    lft: 1
+    rght: 4
+    tree_id: 1
+    level: 0
+
+- model: stock.stocklocation
+  pk: 2
+  fields:
+    metadata: {}
+    name: "Almacén B"
+    description: "Almacén secundario B"
+    parent: null
+    pathstring: "Almacén B"
+    barcode_data: ""
+    barcode_hash: ""
+    custom_icon: null
+    owner: null
+    structural: false
+    external: false
+    location_type: null
+    lft: 1
+    rght: 2
+    tree_id: 2
+    level: 0
+
+- model: stock.stocklocation
+  pk: 3
+  fields:
+    metadata: {}
+    name: "Almacén C"
+    description: "Almacén terciario C"
+    parent: null
+    pathstring: "Almacén C"
+    barcode_data: ""
+    barcode_hash: ""
+    custom_icon: null
+    owner: null
+    structural: false
+    external: false
+    location_type: null
+    lft: 1
+    rght: 2
+    tree_id: 3
+    level: 0
+
+- model: stock.stocklocation
+  pk: 4
+  fields:
+    metadata: {}
+    name: "Cajón 1"
+    description: "Cajón dentro de Almacén A"
+    parent: 1
+    pathstring: "Almacén A/Cajón 1"
+    barcode_data: ""
+    barcode_hash: ""
+    custom_icon: null
+    owner: null
+    structural: false
+    external: false
+    location_type: null
+    lft: 2
+    rght: 3
+    tree_id: 1
+    level: 1
+
+# ── Empresas: proveedor y cliente ─────────────────────────────
+# ST-008/ST-009: Sales Orders / Return Orders necesitan cliente
+- model: company.company
+  pk: 1
+  fields:
+    metadata: {}
+    notes: null
+    image: ""
+    name: "Proveedor Electrónico SA"
+    description: ""
+    website: ""
+    phone: ""
+    email: null
+    contact: ""
+    link: ""
+    active: true
+    is_customer: false
+    is_supplier: true
+    is_manufacturer: false
+    currency: "USD"
+    tax_id: ""
+
+- model: company.company
+  pk: 2
+  fields:
+    metadata: {}
+    notes: null
+    image: ""
+    name: "Cliente Distribuidor SA"
+    description: ""
+    website: ""
+    phone: ""
+    email: null
+    contact: ""
+    link: ""
+    active: true
+    is_customer: true
+    is_supplier: false
+    is_manufacturer: false
+    currency: "USD"
+    tax_id: ""
+
+# ── SupplierParts — vinculan partes 1/2/3 al proveedor pk=1 ──
+- model: company.supplierpart
+  pk: 1
+  fields:
+    metadata: {}
+    notes: null
+    barcode_data: ""
+    barcode_hash: ""
+    updated: "2024-01-01T00:00:00Z"
+    part: 1
+    supplier: 1
+    SKU: "RES-10K-001"
+    active: true
+    primary: true
+    manufacturer_part: null
+    link: null
+    description: null
+    note: null
+    base_cost: "0.000"
+    packaging: null
+    pack_quantity: "1"
+    pack_quantity_native: "1.0000000000"
+    multiple: 1
+    available: "0.000"
+    availability_updated: null
+
+- model: company.supplierpart
+  pk: 2
+  fields:
+    metadata: {}
+    notes: null
+    barcode_data: ""
+    barcode_hash: ""
+    updated: "2024-01-01T00:00:00Z"
+    part: 2
+    supplier: 1
+    SKU: "CAP-100UF-001"
+    active: true
+    primary: true
+    manufacturer_part: null
+    link: null
+    description: null
+    note: null
+    base_cost: "0.000"
+    packaging: null
+    pack_quantity: "1"
+    pack_quantity_native: "1.0000000000"
+    multiple: 1
+    available: "0.000"
+    availability_updated: null
+
+- model: company.supplierpart
+  pk: 3
+  fields:
+    metadata: {}
+    notes: null
+    barcode_data: ""
+    barcode_hash: ""
+    updated: "2024-01-01T00:00:00Z"
+    part: 3
+    supplier: 1
+    SKU: "LED-RED-001"
+    active: true
+    primary: true
+    manufacturer_part: null
+    link: null
+    description: null
+    note: null
+    base_cost: "0.000"
+    packaging: null
+    pack_quantity: "1"
+    pack_quantity_native: "1.0000000000"
+    multiple: 1
+    available: "0.000"
+    availability_updated: null
+
+# ── BOM de PCB Sensor v1 (pk=5): 10x Resistencia, 2x Capacitor, 3x LED ──
+- model: part.bomitem
+  pk: 1
+  fields:
+    metadata: {}
+    part: 5
+    sub_part: 1
+    raw_amount: "10"
+    quantity: "10.00000"
+    optional: false
+    consumable: false
+    setup_quantity: "0.00000"
+    attrition: "0.000"
+    rounding_multiple: null
+    reference: ""
+    note: ""
+    checksum: ""
+    validated: false
+    inherited: false
+    allow_variants: false
+
+- model: part.bomitem
+  pk: 2
+  fields:
+    metadata: {}
+    part: 5
+    sub_part: 2
+    raw_amount: "2"
+    quantity: "2.00000"
+    optional: false
+    consumable: false
+    setup_quantity: "0.00000"
+    attrition: "0.000"
+    rounding_multiple: null
+    reference: ""
+    note: ""
+    checksum: ""
+    validated: false
+    inherited: false
+    allow_variants: false
+
+- model: part.bomitem
+  pk: 3
+  fields:
+    metadata: {}
+    part: 5
+    sub_part: 3
+    raw_amount: "3"
+    quantity: "3.00000"
+    optional: false
+    consumable: false
+    setup_quantity: "0.00000"
+    attrition: "0.000"
+    rounding_multiple: null
+    reference: ""
+    note: ""
+    checksum: ""
+    validated: false
+    inherited: false
+    allow_variants: false

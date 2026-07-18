@@ -1,0 +1,96 @@
+# Suites de pruebas propias (Hito 2) — funcionales, integración y sistema.
+#
+# A diferencia de qc_checks.yaml (que corre el test runner interno de Django,
+# `invoke dev.test`, contra la base de código), este workflow corre las
+# suites black-box propias en tests/{funcionales,integracion,sistema}/ contra
+# una instancia real de InvenTree levantada con `start_inventree.py`, tal
+# como se ejecutan en local.
+
+name: Custom QA Suites
+
+on:
+  push:
+    branches-ignore: ["l10*", "dependabot/**", "backport/**"]
+    paths:
+      - "tests/**"
+      - "start_inventree.py"
+      - "setup_system_tests.py"
+      - "src/backend/InvenTree/**"
+  pull_request:
+    branches-ignore: ["l10*"]
+    paths:
+      - "tests/**"
+      - "start_inventree.py"
+      - "setup_system_tests.py"
+      - "src/backend/InvenTree/**"
+  workflow_dispatch:
+
+env:
+  python_version: 3.12
+
+permissions:
+  contents: read
+
+jobs:
+  custom-qa-suites:
+    name: Funcionales + Integración + Sistema [PostgreSQL]
+    runs-on: ubuntu-24.04
+
+    env:
+      INVENTREE_DB_ENGINE: django.db.backends.postgresql
+      INVENTREE_DB_NAME: inventree
+      INVENTREE_DB_USER: inventree
+      INVENTREE_DB_PASSWORD: password
+      INVENTREE_DB_HOST: "127.0.0.1"
+      INVENTREE_DB_PORT: 5432
+      INVENTREE_CACHE_HOST: localhost
+      INVENTREE_CACHE_PORT: 6379
+      INVENTREE_DEBUG: true
+      INVENTREE_LOG_LEVEL: WARNING
+      INVENTREE_CONSOLE_LOG: false
+      INVENTREE_SITE_URL: http://localhost:8000
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: inventree
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Environment Setup
+        uses: ./.github/actions/setup
+        with:
+          apt-dependency: gettext poppler-utils libpq-dev
+          pip-dependency: psycopg django-redis>=5.0.0 playwright
+          dev-install: true
+          static: true
+
+      - name: Install Playwright browser (Chromium)
+        run: playwright install --with-deps chromium
+
+      - name: Ejecutar suites (funcionales + integración + sistema, con coverage)
+        run: python3 start_inventree.py --tests --coverage
+
+      - name: Subir evidencia (screenshots + resultados JSON)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test_output
+          path: test_output/
+          retention-days: 14
+
+      - name: Subir datos crudos de coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-data
+          path: .coverage*
+          retention-days: 14

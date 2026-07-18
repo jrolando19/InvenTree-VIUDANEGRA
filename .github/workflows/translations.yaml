@@ -14,7 +14,6 @@ permissions:
 
 jobs:
   synchronize-with-crowdin:
-    if: github.repository == 'inventree/InvenTree'
     runs-on: ubuntu-latest
     permissions:
       contents: write
