@@ -65,13 +65,39 @@ jobs:
           - 6379:6379
 
     steps:
-      - name: Environment Setup
-        uses: ./.github/actions/setup
+      # Pasos de entorno en línea (no se reutiliza ./.github/actions/setup):
+      # ese composite action solo existe si se clonó/copió el árbol COMPLETO
+      # de InvenTree. Como este workflow puede vivir en una copia parcial del
+      # repo (solo las carpetas de pruebas + CI), se evita esa dependencia.
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.python_version }}
+        uses: actions/setup-python@v5
         with:
-          apt-dependency: gettext poppler-utils libpq-dev
-          pip-dependency: psycopg django-redis>=5.0.0 playwright
-          dev-install: true
-          static: true
+          python-version: ${{ env.python_version }}
+          cache: pip
+          cache-dependency-path: |
+            src/backend/requirements.txt
+            src/backend/requirements-dev.txt
+
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext poppler-utils libpq-dev
+
+      - name: Instalar dependencias de Python
+        run: |
+          python3 -m pip install -U pip
+          pip3 install -U invoke wheel
+          pip3 install 'uv>=0.9.6'
+          echo "UV_SYSTEM_PYTHON=1" >> "$GITHUB_ENV"
+          uv pip install psycopg 'django-redis>=5.0.0' playwright
+
+      - name: invoke install --dev
+        run: invoke install --dev
+
+      - name: invoke static --skip-plugins
+        run: invoke static --skip-plugins
 
       - name: Install Playwright browser (Chromium)
         run: playwright install --with-deps chromium
