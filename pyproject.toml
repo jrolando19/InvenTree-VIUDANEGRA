@@ -10,6 +10,10 @@ exclude = [
     ".venv",
     ".env",
     "src/backend/plugins/*",
+    # Scripts propios del Hito 2 (orquestador + seed de datos de prueba) —
+    # no son parte del código fuente de InvenTree, mismo criterio que "tests".
+    "start_inventree.py",
+    "setup_system_tests.py",
 ]
 src = ["src/backend/InvenTree"]
 # line-length = 120
