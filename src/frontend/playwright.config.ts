@@ -3,6 +3,13 @@ import { defineConfig, devices } from '@playwright/test';
 // Detect if running in CI
 const IS_CI = !!process.env.CI;
 
+// The @flakiness/playwright reporter authenticates via GitHub Actions OIDC,
+// which is scoped to a single repository (inventree/InvenTree) on flakiness.io's
+// side -- on any fork, GITHUB_REPOSITORY differs and the upload is rejected
+// with a 403, failing the whole job for a reporter step that isn't essential
+// to the actual test results. Only enable it on the official repo.
+const IS_OFFICIAL_REPO = process.env.GITHUB_REPOSITORY === 'inventree/InvenTree';
+
 /* We optionally spin-up services based on the testing mode:
  *
  * Local Development:
@@ -47,7 +54,14 @@ export default defineConfig({
         ['html', { open: 'never' }],
         ['blob'],
         ['github'],
-        ['@flakiness/playwright', { flakinessProject: 'InvenTree/InvenTree' }]
+        ...(IS_OFFICIAL_REPO
+          ? ([
+              [
+                '@flakiness/playwright',
+                { flakinessProject: 'InvenTree/InvenTree' }
+              ]
+            ] as const)
+          : [])
       ]
     : 'list',
 
