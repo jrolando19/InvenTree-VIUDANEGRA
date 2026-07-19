@@ -103,6 +103,9 @@ jobs:
       - name: invoke install
         run: invoke install
 
+      - name: invoke migrate
+        run: invoke migrate
+
       - name: invoke static --skip-plugins
         run: invoke static --skip-plugins
 

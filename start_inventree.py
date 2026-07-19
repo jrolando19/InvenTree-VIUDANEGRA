@@ -189,11 +189,15 @@ def stop_server_pid(pid, sig=signal.SIGINT, timeout=15):
     return False
 
 
+SERVER_LOG = os.path.join(BASE_DIR, ".inventree_server.log")
+
+
 def start_plain_server():
     """Levanta manage.py runserver sin instrumentar, guarda el PID."""
+    log = open(SERVER_LOG, "w")
     server = subprocess.Popen(
         [VENV_PY, MANAGE, "runserver", "0.0.0.0:8000", "--noreload"],
-        cwd=BASE_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        cwd=BASE_DIR, stdout=log, stderr=subprocess.STDOUT,
     )
     with open(PID_FILE, "w") as f:
         f.write(str(server.pid))
@@ -202,15 +206,24 @@ def start_plain_server():
 
 def start_coverage_server(data_file):
     """Levanta manage.py runserver bajo `coverage run` con un data-file propio."""
+    log = open(SERVER_LOG, "w")
     server = subprocess.Popen(
         [VENV_PY, "-m", "coverage", "run",
          f"--source={SRC_DIR}", f"--omit={COV_OMIT}", f"--data-file={data_file}",
          MANAGE, "runserver", "0.0.0.0:8000", "--noreload"],
-        cwd=BASE_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        cwd=BASE_DIR, stdout=log, stderr=subprocess.STDOUT,
     )
     with open(PID_FILE, "w") as f:
         f.write(str(server.pid))
     return server.pid
+
+
+def print_server_log():
+    """Imprime el log del servidor (útil cuando no arrancó o murió temprano)."""
+    if os.path.exists(SERVER_LOG):
+        print(f"\n  {WARN} Log del servidor ({SERVER_LOG}):")
+        with open(SERVER_LOG) as f:
+            print(f.read())
 
 
 def module_coverage_table(data_file, modules=None):
@@ -309,6 +322,8 @@ def run_suite_with_coverage(suite_name):
     pid = start_coverage_server(data_file)
     if not wait_for_server():
         stop_server_pid(pid)
+        print(f"  {FAIL}  El servidor no arrancó — abortando la suite.")
+        print_server_log()
         return None, False
 
     path = os.path.join(BASE_DIR, suite_name)
@@ -351,7 +366,8 @@ def run_suites_single_server(suites, title, combined_label):
     if not wait_for_server():
         stop_server_pid(pid)
         print(f"  {FAIL}  El servidor no arrancó — abortando la corrida.")
-        return
+        print_server_log()
+        return False
 
     totals = {"pass": 0, "fail": 0}
     n = len(suites)
@@ -377,6 +393,7 @@ def run_suites_single_server(suites, title, combined_label):
     print(f"\n{'═'*60}")
     print(f"  Suites completadas: {totals['pass']} OK  {totals['fail']} con errores")
     print('═'*60)
+    return totals["fail"] == 0
 
 
 def run_suites(coverage=False, suites=None, title="EJECUTANDO TODAS LAS SUITES DE PRUEBAS",
@@ -391,8 +408,7 @@ def run_suites(coverage=False, suites=None, title="EJECUTANDO TODAS LAS SUITES D
     suites = suites if suites is not None else SUITES
 
     if coverage and len(suites) > 1:
-        run_suites_single_server(suites, title, combined_label)
-        return
+        return run_suites_single_server(suites, title, combined_label)
 
     print(f"\n{'═'*60}")
     print(f"  {title}")
@@ -427,6 +443,7 @@ def run_suites(coverage=False, suites=None, title="EJECUTANDO TODAS LAS SUITES D
     print(f"\n{'═'*60}")
     print(f"  Suites completadas: {totals['pass']} OK  {totals['fail']} con errores")
     print('═'*60)
+    return totals["fail"] == 0
 
 
 def show_suite_submenu(items, title):
@@ -646,7 +663,8 @@ def run_once(args, action):
 
     # 4. Pruebas si se pidieron por CLI (--tests, todas las suites en orden)
     if args.tests:
-        run_suites(coverage=args.coverage)
+        if not run_suites(coverage=args.coverage):
+            sys.exit(1)
     else:
         print(f"  {INFO} Para ejecutar las pruebas: python start_inventree.py --tests")
         print(f"  {INFO} Para ejecutar con coverage por suite: python start_inventree.py --tests --coverage")
