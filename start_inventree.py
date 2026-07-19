@@ -90,7 +90,14 @@ def check_deps():
     """Verifica que PostgreSQL y Redis estén accesibles."""
     import socket
     errors = []
-    for host, port, name in [("db", 5432, "PostgreSQL"), ("redis", 6379, "Redis")]:
+    db_host = os.environ.get("INVENTREE_DB_HOST", "db")
+    db_port = int(os.environ.get("INVENTREE_DB_PORT", 5432))
+    cache_host = os.environ.get("INVENTREE_CACHE_HOST", "redis")
+    cache_port = int(os.environ.get("INVENTREE_CACHE_PORT", 6379))
+    for host, port, name in [
+        (db_host, db_port, "PostgreSQL"),
+        (cache_host, cache_port, "Redis"),
+    ]:
         try:
             s = socket.create_connection((host, port), timeout=3)
             s.close()
