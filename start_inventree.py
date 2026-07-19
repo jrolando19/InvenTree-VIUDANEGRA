@@ -25,6 +25,10 @@ import time
 
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 VENV_PY    = os.path.join(BASE_DIR, "dev", "venv", "bin", "python")
+if not os.path.isfile(VENV_PY):
+    # Sin venv local (p. ej. en CI, donde las dependencias se instalan
+    # directo al Python del sistema): usar el intérprete actual.
+    VENV_PY = sys.executable
 MANAGE     = os.path.join(BASE_DIR, "src", "backend", "InvenTree", "manage.py")
 SRC_DIR    = os.path.join(BASE_DIR, "src", "backend", "InvenTree")
 PID_FILE   = os.path.join(BASE_DIR, ".inventree_server.pid")

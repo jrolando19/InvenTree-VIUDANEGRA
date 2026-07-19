@@ -102,10 +102,12 @@ def transfer(item_pk, dest, qty, notes="TC"):
         "notes": notes
     })
 
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_MANAGE_PY = os.path.join(_BASE_DIR, "src", "backend", "InvenTree", "manage.py")
+
 def clear_cache():
     subprocess.run(
-        ["/home/inventree/dev/venv/bin/python",
-         "/home/inventree/src/backend/InvenTree/manage.py",
+        [sys.executable, _MANAGE_PY,
          "shell", "-c",
          "from django.core.cache import cache; cache.clear()"],
         capture_output=True)

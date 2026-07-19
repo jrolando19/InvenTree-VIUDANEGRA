@@ -97,6 +97,9 @@ jobs:
       - name: invoke install --dev
         run: invoke install --dev
 
+      - name: invoke install
+        run: invoke install
+
       - name: invoke static --skip-plugins
         run: invoke static --skip-plugins
 
