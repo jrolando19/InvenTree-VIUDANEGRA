@@ -91,7 +91,7 @@ jobs:
           pip3 install -U invoke wheel
           pip3 install 'uv>=0.9.6'
           echo "UV_SYSTEM_PYTHON=1" >> "$GITHUB_ENV"
-          uv pip install psycopg 'django-redis>=5.0.0' playwright
+          uv pip install --system psycopg 'django-redis>=5.0.0' playwright
 
       - name: invoke install --dev
         run: invoke install --dev
