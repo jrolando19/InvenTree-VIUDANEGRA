@@ -90,6 +90,7 @@ jobs:
           python3 -m pip install -U pip
           pip3 install -U invoke wheel
           pip3 install 'uv>=0.9.6'
+          export UV_SYSTEM_PYTHON=1
           echo "UV_SYSTEM_PYTHON=1" >> "$GITHUB_ENV"
           uv pip install psycopg 'django-redis>=5.0.0' playwright
 
