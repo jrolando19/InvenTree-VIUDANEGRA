@@ -38,7 +38,7 @@ def generate_batch_code(**kwargs):
         **kwargs,
     }
 
-    # Nota: requiere un plugin con mixin VALIDATION registrado; sin infraestructura
+    # Nota: necesita un plugin con mixin VALIDATION registrado; sin infraestructura
     # de plugins en el entorno de pruebas black-box, este loop nunca itera.
     for plugin in registry.with_mixin(PluginMixinEnum.VALIDATION):  # pragma: no cover
         generate = getattr(plugin, 'generate_batch_code', None)

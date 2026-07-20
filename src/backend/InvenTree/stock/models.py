@@ -23,6 +23,7 @@ from django.utils.translation import gettext_lazy as _
 
 import structlog
 from djmoney.contrib.exchange.models import convert_money
+from InvenTree.helpers_db import bulk_create_and_fetch
 from mptt.managers import TreeManager
 from mptt.models import TreeForeignKey
 
@@ -1643,7 +1644,9 @@ class StockItem(
 
         return query
 
-    def transfer_order_allocation_count(self, active=True, **kwargs):  # pragma: no cover
+    def transfer_order_allocation_count(
+        self, active=True, **kwargs
+    ):  # pragma: no cover
         """Return the total quantity allocated to TransferOrders."""
         query = self.get_transfer_order_allocations(active=active, **kwargs)
         query = query.aggregate(q=Coalesce(Sum('quantity'), Decimal(0)))

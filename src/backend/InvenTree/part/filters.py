@@ -280,7 +280,9 @@ def annotate_sales_order_allocations(reference: str = '', location=None) -> Quer
 
 # Nota: codigo muerto -- sin llamadores en todo el repo (la unica referencia es
 # un comentario en part/serializers.py:695); confirmado via grep.
-def annotate_transfer_order_allocations(reference: str = '', location=None) -> QuerySet:  # pragma: no cover
+def annotate_transfer_order_allocations(
+    reference: str = '', location=None
+) -> QuerySet:  # pragma: no cover
     """Annotate the total quantity of each part allocated to transfer orders.
 
     - This function calculates the total part quantity allocated to open transfer orders"

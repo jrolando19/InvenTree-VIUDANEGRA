@@ -18,6 +18,7 @@ import structlog
 from djmoney.contrib.exchange.exceptions import MissingRate
 from djmoney.contrib.exchange.models import convert_money
 from djmoney.money import Money
+from InvenTree.helpers_db import bulk_create_and_fetch
 from mptt.models import TreeForeignKey
 
 import common.models as common_models

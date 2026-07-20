@@ -30,7 +30,7 @@ logger = structlog.get_logger('inventree')
 # Nota: after_save_part() invoca notify_low_stock_if_required() con
 # force_async=not settings.TESTING -- en el entorno de pruebas black-box (server
 # real via manage.py runserver, no Django TestCase) settings.TESTING es False,
-# por lo que la tarea siempre se encola de forma asincrona (requiere un worker
+# por lo que la tarea siempre se encola de forma asincrona (necesita un worker
 # django-q real, ausente en este entorno) y nunca se ejecuta de forma sincrona.
 # No alcanzable via HTTP black-box; no mapea a ningun RF de FN1.
 @tracer.start_as_current_span('notify_low_stock')

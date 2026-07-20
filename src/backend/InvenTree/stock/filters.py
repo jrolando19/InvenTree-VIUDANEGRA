@@ -24,7 +24,7 @@ def annotate_location_items(filter: Optional[Q] = None):
 
     # Optionally apply extra filter to returned results
     # Nota: unico caller (LocationSerializer.annotate_queryset) siempre invoca sin
-    # argumentos -> filter=None; ningun codigo en el repo pasa un filtro no-None.
+    # parametros -> filter=None; ningun codigo en el repo pasa un filtro no-None.
     if filter is not None:  # pragma: no cover
         subquery = subquery.filter(filter)
 

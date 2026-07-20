@@ -64,7 +64,7 @@ def perform_stocktake(
             parts = part.get_descendants(include_self=True)
         except (ValueError, part_models.Part.DoesNotExist):  # pragma: no cover
             # Nota: PartStocktakeGenerateSerializer.part ya es un PrimaryKeyRelatedField
-            # que valida existencia antes de invocar esta funcion; inalcanzable via API.
+            # que valida existencia antes de invocar este metodo; inalcanzable via API.
             parts = part_models.Part.objects.all()
     else:
         parts = part_models.Part.objects.all()
@@ -91,7 +91,10 @@ def perform_stocktake(
     if location_id is not None:
         try:
             location = stock_models.StockLocation.objects.get(id=location_id)
-        except (ValueError, stock_models.StockLocation.DoesNotExist):  # pragma: no cover
+        except (
+            ValueError,
+            stock_models.StockLocation.DoesNotExist,
+        ):  # pragma: no cover
             # Nota: 'location' ya viene pre-validado por el serializer.
             location = None
     else:

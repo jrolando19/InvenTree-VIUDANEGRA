@@ -203,9 +203,9 @@ class PartCategory(
 
         return queryset
 
+    @property
     # Nota: sin campo de serializer que lo exponga (CategorySerializer usa una
     # anotacion 'part_count' separada), sin llamador externo.
-    @property
     def item_count(self):  # pragma: no cover
         """Return the number of parts contained in this PartCategory."""
         return self.partcount()
@@ -732,7 +732,7 @@ class Part(
         from plugin import PluginMixinEnum, registry
 
         # Skip plugin validation checks during read-only management commands
-        # Nota: requiere un plugin con mixin VALIDATION registrado; sin
+        # Nota: necesita un plugin con mixin VALIDATION registrado; sin
         # infraestructura de plugins en el entorno black-box, inalcanzable.
         if not InvenTree.ready.isReadOnlyCommand():  # pragma: no cover
             for plugin in registry.with_mixin(PluginMixinEnum.VALIDATION):
@@ -758,7 +758,7 @@ class Part(
         from plugin import PluginMixinEnum, registry
 
         # Skip plugin validation checks during read-only management commands
-        # Nota: mismo motivo de exclusion que validate_name (requiere plugin VALIDATION).
+        # Nota: mismo motivo de exclusion que validate_name (necesita plugin VALIDATION).
         if not InvenTree.ready.isReadOnlyCommand():  # pragma: no cover
             for plugin in registry.with_mixin(PluginMixinEnum.VALIDATION):
                 try:
@@ -1380,9 +1380,9 @@ class Part(
         related_name='parts_responsible',
     )
 
+    @property
     # Nota: codigo muerto -- el campo 'category_path' del serializer usa
     # source='category.get_path' (una propiedad distinta), no esta property.
-    @property
     def category_path(self):  # pragma: no cover
         """Return the category path of this Part instance."""
         if self.category:
@@ -1794,7 +1794,7 @@ class Part(
 
         return query['total']
 
-    # Nota: codigo muerto -- unico llamador potencial (allocation_count) tiene
+    # Nota: codigo muerto -- lo unico que podria llamarlo (allocation_count) tiene
     # la linea comentada explicitamente ("stock allocated to a transfer order
     # will not impact its availability"); sin llamadores reales en el repo.
     def transfer_order_allocations(self, **kwargs):  # pragma: no cover
@@ -1842,9 +1842,9 @@ class Part(
     def allocation_count(self, **kwargs):
         """Return the total quantity of stock allocated for this part, against build orders, sales orders, and transfer orders."""
         if self.id is None:  # pragma: no cover
-            # If this instance has not been saved, foreign-key lookups will fail
             # Nota: inalcanzable via API -- las instancias siempre estan guardadas
-            # antes de ser serializadas/consultadas.
+            # antes de pasar por el serializer.
+            # If this instance has not been saved, foreign-key lookups will fail
             return 0
 
         return sum([
@@ -2239,150 +2239,6 @@ class Part(
             # which can cause issues down the track
             pass
 
-    def get_price_info(self, quantity=1, buy=True, bom=True, internal=False):  # pragma: no cover
-        """Return a simplified pricing string for this part.
-
-        Args:
-            quantity: Number of units to calculate price for
-            buy: Include supplier pricing (default = True)
-            bom: Include BOM pricing (default = True)
-            internal: Include internal pricing (default = False)
-        """
-        price_range = self.get_price_range(quantity, buy, bom, internal)
-
-        if price_range is None:
-            return None
-
-        min_price, max_price = price_range
-
-        if min_price == max_price:
-            return min_price
-
-        min_price = normalize(min_price)
-        max_price = normalize(max_price)
-
-        return f'{min_price} - {max_price}'
-
-    def get_supplier_price_range(self, quantity=1):  # pragma: no cover
-        """Return the supplier price range of this part.
-
-        Actions:
-        - Checks if there is any supplier pricing information associated with this Part
-        - Iterate through available supplier pricing and select (min, max)
-        - Returns tuple of (min, max)
-
-        Arguments:
-            quantity: Quantity at which to calculate price (default=1)
-
-        Returns: (min, max) tuple or (None, None) if no supplier pricing available
-        """
-        min_price = None
-        max_price = None
-
-        for supplier in self.supplier_parts.all():
-            price = supplier.get_price(quantity)
-
-            if price is None:
-                continue
-
-            if min_price is None or price < min_price:
-                min_price = price
-
-            if max_price is None or price > max_price:
-                max_price = price
-
-        if min_price is None or max_price is None:
-            return None
-
-        min_price = normalize(min_price)
-        max_price = normalize(max_price)
-
-        return (min_price, max_price)
-
-    def get_bom_price_range(self, quantity=1, internal=False, purchase=False):  # pragma: no cover
-        """Return the price range of the BOM for this part.
-
-        Adds the minimum price for all components in the BOM.
-        Note: If the BOM contains items without pricing information,
-        these items cannot be included in the BOM!
-        """
-        min_price = None
-        max_price = None
-
-        for item in self.get_bom_items().select_related('sub_part'):
-            if item.sub_part.pk == self.pk:
-                logger.warning('WARNING: BomItem ID %s contains itself in BOM', item.pk)
-                continue
-
-            q = Decimal(quantity)
-            i = Decimal(item.quantity)
-
-            prices = item.sub_part.get_price_range(
-                q * i, internal=internal, purchase=purchase
-            )
-
-            if prices is None:
-                continue
-
-            low, high = prices
-
-            if min_price is None:
-                min_price = 0
-
-            if max_price is None:
-                max_price = 0
-
-            min_price += low
-            max_price += high
-
-        if min_price is None or max_price is None:
-            return None
-
-        min_price = normalize(min_price)
-        max_price = normalize(max_price)
-
-        return (min_price, max_price)
-
-    def get_price_range(  # pragma: no cover
-        self, quantity=1, buy=True, bom=True, internal=False, purchase=False
-    ):
-        """Return the price range for this part.
-
-        This price can be either:
-        - Supplier price (if purchased from suppliers)
-        - BOM price (if built from other parts)
-        - Internal price (if set for the part)
-        - Purchase price (if set for the part)
-
-        Returns:
-            Minimum of the supplier, BOM, internal or purchase price. If no pricing available, returns None
-        """
-        # only get internal price if set and should be used
-        if internal and self.has_internal_price_breaks:
-            internal_price = self.get_internal_price(quantity)
-            return internal_price, internal_price
-
-        # only get purchase price if set and should be used
-        if purchase:
-            purchase_price = self.get_purchase_price(quantity)
-            if purchase_price:
-                return purchase_price
-
-        buy_price_range = self.get_supplier_price_range(quantity) if buy else None
-        bom_price_range = (
-            self.get_bom_price_range(quantity, internal=internal) if bom else None
-        )
-
-        if buy_price_range is None:
-            return bom_price_range
-
-        elif bom_price_range is None:
-            return buy_price_range
-        return (
-            min(buy_price_range[0], bom_price_range[0]),
-            max(buy_price_range[1], bom_price_range[1]),
-        )
-
     base_cost = models.DecimalField(
         max_digits=19,
         decimal_places=6,
@@ -2398,79 +2254,6 @@ class Part(
         verbose_name=_('multiple'),
         help_text=_('Sell multiple'),
     )
-
-    get_price = common.currency.get_price
-
-    @property
-    def has_price_breaks(self):  # pragma: no cover
-        """Return True if this part has sale price breaks."""
-        return self.price_breaks.exists()
-
-    # Nota: el campo 'price_breaks' del serializer usa source='salepricebreaks'
-    # directamente (bypass de esta property); unico consumidor real es
-    # order/models.py (pricing por defecto de SalesOrderLineItem).
-    @property
-    def price_breaks(self):  # pragma: no cover
-        """Return the associated price breaks in the correct order."""
-        return self.salepricebreaks.order_by('quantity').all()
-
-    @property
-    def unit_pricing(self):  # pragma: no cover
-        """Returns the price of this Part at quantity=1."""
-        return self.get_price(1)
-
-    def add_price_break(self, quantity, price):  # pragma: no cover
-        """Create a new price break for this part.
-
-        Args:
-            quantity: Numerical quantity
-            price: Must be a Money object
-        """
-        # Check if a price break at that quantity already exists...
-        if self.price_breaks.filter(quantity=quantity, part=self.pk).exists():
-            return
-
-        PartSellPriceBreak.objects.create(part=self, quantity=quantity, price=price)
-
-    # Nota: get_internal_price/has_internal_price_breaks/internal_price_breaks/
-    # get_purchase_price -- sin llamadores fuera de tests; unico llamador
-    # potencial (get_price_range) ya esta excluido (# pragma: no cover propio).
-    def get_internal_price(self, quantity, moq=True, multiples=True, currency=None):  # pragma: no cover
-        """Return the internal price of this Part at the specified quantity."""
-        return common.currency.get_price(
-            self, quantity, moq, multiples, currency, break_name='internal_price_breaks'
-        )
-
-    @property
-    def has_internal_price_breaks(self):  # pragma: no cover
-        """Return True if this Part has internal pricing information."""
-        return self.internal_price_breaks.exists()
-
-    @property
-    def internal_price_breaks(self):  # pragma: no cover
-        """Return the associated price breaks in the correct order."""
-        return self.internalpricebreaks.order_by('quantity').all()
-
-    def get_purchase_price(self, quantity):  # pragma: no cover
-        """Calculate the purchase price for this part at the specified quantity.
-
-        - Looks at available supplier pricing data
-        - Calculates the price base on the closest price point
-        """
-        currency = currency_code_default()
-        try:
-            prices = [
-                convert_money(item.purchase_price, currency).amount
-                for item in self.stock_items.all()
-                if item.purchase_price
-            ]
-        except MissingRate:
-            prices = None
-
-        if prices:
-            return min(prices) * quantity, max(prices) * quantity
-
-        return None
 
     @transaction.atomic
     def copy_bom_from(self, other, clear: bool = True, **kwargs):
@@ -2588,6 +2371,14 @@ class Part(
 
             # Ensure we do not create duplicate parameters if multiple categories have the same template
             if category_template.template.pk in template_ids:
+                continue
+
+            # Skip templates which enforce a uniqueness requirement - applying the same
+            # default value to every part in the category would create conflicting values
+            if (
+                category_template.template.unique
+                != common.models.ParameterTemplate.UniqueOptions.NONE
+            ):
                 continue
 
             template_ids.add(category_template.template.pk)
@@ -3637,6 +3428,7 @@ class PartInternalPriceBreak(common.models.PriceBreak):
         """Metaclass providing extra model definition."""
 
         unique_together = ('part', 'quantity')
+        verbose_name = _('Part Internal Price Break')
 
     @staticmethod
     def get_api_url():
@@ -4333,10 +4125,10 @@ class BomItem(InvenTree.models.MetadataMixin, InvenTree.models.InvenTreeModel):
 
         return self.get_item_hash() == self.checksum
 
+    @property
     # Nota: consumido exclusivamente por build/models.py y build/serializers.py
     # (logica/serializacion propia de build orders), no por BomItemSerializer
     # del part app.
-    @property
     def is_consumable(self) -> bool:  # pragma: no cover
         """Return True if this BOM line should be treated as consumable.
 
