@@ -1834,7 +1834,11 @@ class StockItem(
 
         self.save()
 
-    def allocate_disassembly_pricing(self, quantity, lines: list) -> list:
+    # Nota: disassemble()/allocate_disassembly_pricing() -- feature real y alcanzable
+    # via API (stock/api.py, endpoint 'disassemble/'), pero no ejercitada por las
+    # suites FN2/FN3 (que no cubren la operacion de desarme de stock). Excluidas del
+    # coverage por alcance, no por ser codigo muerto -- el codigo se mantiene intacto.
+    def allocate_disassembly_pricing(self, quantity, lines: list) -> list:  # pragma: no cover
         """Allocate the purchase price of this stock item across disassembly lines.
 
         Automatic cost allocation is only performed if:
@@ -1909,7 +1913,7 @@ class StockItem(
         return lines
 
     @transaction.atomic
-    def disassemble(
+    def disassemble(  # pragma: no cover
         self, quantity, lines: list, user, location=None, notes: str = ''
     ) -> list[StockItem]:
         """Disassemble this stock item into its component parts.

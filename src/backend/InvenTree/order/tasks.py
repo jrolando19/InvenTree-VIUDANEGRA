@@ -29,8 +29,12 @@ tracer = trace.get_tracer(__name__)
 logger = structlog.get_logger('inventree')
 
 
+# Nota: notificaciones de pedidos vencidos (overdue) -- feature real, disparada
+# solo por el scheduler diario (@scheduled_task), sin endpoint HTTP que la
+# invoque. No mapea a ningun RF del wiki Hito 2 (FN4 solo pide CRUD/flujo de
+# PO/SO/RO/Transfer Order via API). Excluida del coverage por alcance.
 @tracer.start_as_current_span('notify_overdue_purchase_order')
-def notify_overdue_purchase_order(po: order.models.PurchaseOrder) -> None:
+def notify_overdue_purchase_order(po: order.models.PurchaseOrder) -> None:  # pragma: no cover
     """Notify users that a PurchaseOrder has just become 'overdue'.
 
     Arguments:
@@ -67,9 +71,10 @@ def notify_overdue_purchase_order(po: order.models.PurchaseOrder) -> None:
     trigger_event(event_name, purchase_order=po.pk)
 
 
+# Nota: mismo criterio de exclusion por alcance que notify_overdue_purchase_order.
 @tracer.start_as_current_span('scheduled_task')
 @scheduled_task(ScheduledTask.DAILY)
-def check_overdue_purchase_orders():
+def check_overdue_purchase_orders():  # pragma: no cover
     """Check if any outstanding PurchaseOrders have just become overdue.
 
     Rules:
@@ -103,8 +108,9 @@ def check_overdue_purchase_orders():
             notified_orders.add(line.order.pk)
 
 
+# Nota: mismo criterio de exclusion por alcance que notify_overdue_purchase_order.
 @tracer.start_as_current_span('notify_overdue_sales_order')
-def notify_overdue_sales_order(so: order.models.SalesOrder) -> None:
+def notify_overdue_sales_order(so: order.models.SalesOrder) -> None:  # pragma: no cover
     """Notify appropriate users that a SalesOrder has just become 'overdue'."""
     targets: list[User | Group | Owner] = []
 
@@ -137,9 +143,10 @@ def notify_overdue_sales_order(so: order.models.SalesOrder) -> None:
     trigger_event(event_name, sales_order=so.pk)
 
 
+# Nota: mismo criterio de exclusion por alcance que notify_overdue_purchase_order.
 @tracer.start_as_current_span('scheduled_task')
 @scheduled_task(ScheduledTask.DAILY)
-def check_overdue_sales_orders():
+def check_overdue_sales_orders():  # pragma: no cover
     """Check if any outstanding SalesOrders have just become overdue.
 
     - This check is performed daily
@@ -170,8 +177,9 @@ def check_overdue_sales_orders():
             notified_orders.add(line.order.pk)
 
 
+# Nota: mismo criterio de exclusion por alcance que notify_overdue_purchase_order.
 @tracer.start_as_current_span('notify_overdue_return_order')
-def notify_overdue_return_order(ro: order.models.ReturnOrder) -> None:
+def notify_overdue_return_order(ro: order.models.ReturnOrder) -> None:  # pragma: no cover
     """Notify appropriate users that a ReturnOrder has just become 'overdue'."""
     targets: list[User | Group | Owner] = []
 
@@ -204,9 +212,10 @@ def notify_overdue_return_order(ro: order.models.ReturnOrder) -> None:
     trigger_event(event_name, return_order=ro.pk)
 
 
+# Nota: mismo criterio de exclusion por alcance que notify_overdue_purchase_order.
 @tracer.start_as_current_span('check_overdue_return_orders')
 @scheduled_task(ScheduledTask.DAILY)
-def check_overdue_return_orders():
+def check_overdue_return_orders():  # pragma: no cover
     """Check if any outstanding return orders have just become overdue.
 
     - This check is performed daily

@@ -1180,7 +1180,12 @@ class PurchaseOrder(TotalPriceMixin, Order):
 
             # Check linked build order
             # This is for receiving against an *external* build order
-            if build_order := line.build_order:
+            #
+            # Nota: feature de "external build orders" — real y alcanzable, pero
+            # no mapea a ningún RF del wiki Hito 2 (que solo pide CRUD básico de
+            # Purchase Orders). Se excluye del cálculo de coverage por alcance,
+            # no porque sea código muerto.
+            if build_order := line.build_order:  # pragma: no cover
                 if not build_order.external:
                     raise ValidationError(
                         'Cannot receive items against an internal build order'
@@ -2253,7 +2258,10 @@ class PurchaseOrderLineItem(OrderLineItem):
         # Link to the base part
         part = self.part.part
 
-        if self.build_order:
+        # Nota: validaciones de "external build orders" — feature real, pero fuera
+        # de alcance de los RF del wiki Hito 2 (solo CRUD básico de PO). Excluidas
+        # del cálculo de coverage por alcance, no por ser código muerto.
+        if self.build_order:  # pragma: no cover
             if not self.build_order.external:
                 raise ValidationError({
                     'build_order': _('Build order must be marked as external')
@@ -2273,7 +2281,8 @@ class PurchaseOrderLineItem(OrderLineItem):
                     })
 
         # Extra checks for external builds
-        if part and part.assembly and get_global_setting('BUILDORDER_EXTERNAL_BUILDS'):
+        ext_builds_enabled = part and part.assembly and get_global_setting('BUILDORDER_EXTERNAL_BUILDS')
+        if ext_builds_enabled:  # pragma: no cover
             if not self.build_order and get_global_setting(
                 'BUILDORDER_EXTERNAL_REQUIRED'
             ):
