@@ -5,6 +5,11 @@
 # suites black-box propias en tests/{funcionales,integracion,sistema}/ contra
 # una instancia real de InvenTree levantada con `start_inventree.py`, tal
 # como se ejecutan en local.
+#
+# Un job por módulo/suite (en vez de un único job secuencial) para que la
+# vista de Actions muestre el desglose por módulo de un vistazo -- a costa de
+# repetir el setup (install/migrate/static) en cada job, ya que cada uno
+# corre en un runner nuevo e independiente.
 
 name: Custom QA Suites
 
@@ -32,8 +37,8 @@ permissions:
   contents: read
 
 jobs:
-  custom-qa-suites:
-    name: Funcionales + Integración + Sistema [PostgreSQL]
+  part:
+    name: "Funcionales: part (FN1 Partes + FN6 Categorías + FN5 BOM)"
     runs-on: ubuntu-24.04
 
     env:
@@ -45,9 +50,9 @@ jobs:
       INVENTREE_DB_PORT: 5432
       INVENTREE_CACHE_HOST: localhost
       INVENTREE_CACHE_PORT: 6379
-      INVENTREE_MEDIA_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_media
-      INVENTREE_STATIC_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_static
-      INVENTREE_BACKUP_DIR: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_backup
+      INVENTREE_MEDIA_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_media-part
+      INVENTREE_STATIC_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_static-part
+      INVENTREE_BACKUP_DIR: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_backup-part
       INVENTREE_DEBUG: true
       INVENTREE_LOG_LEVEL: WARNING
       INVENTREE_CONSOLE_LOG: false
@@ -112,14 +117,14 @@ jobs:
       - name: Install Playwright browser (Chromium)
         run: playwright install --with-deps chromium
 
-      - name: Ejecutar suites (funcionales + integración + sistema, con coverage)
-        run: python3 start_inventree.py --tests --coverage
+      - name: "Ejecutar suite: part (con coverage)"
+        run: python3 start_inventree.py --suite part --coverage
 
       - name: Subir evidencia (screenshots + resultados JSON)
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: test_output
+          name: test_output-part
           path: test_output/
           retention-days: 14
 
@@ -127,7 +132,907 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: coverage-data
+          name: coverage-data-part
+          path: .coverage*
+          retention-days: 14
+          include-hidden-files: true
+
+  stock:
+    name: "Funcionales: stock (FN2/FN3 Stock)"
+    runs-on: ubuntu-24.04
+
+    env:
+      INVENTREE_DB_ENGINE: django.db.backends.postgresql
+      INVENTREE_DB_NAME: inventree
+      INVENTREE_DB_USER: inventree
+      INVENTREE_DB_PASSWORD: password
+      INVENTREE_DB_HOST: "127.0.0.1"
+      INVENTREE_DB_PORT: 5432
+      INVENTREE_CACHE_HOST: localhost
+      INVENTREE_CACHE_PORT: 6379
+      INVENTREE_MEDIA_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_media-stock
+      INVENTREE_STATIC_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_static-stock
+      INVENTREE_BACKUP_DIR: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_backup-stock
+      INVENTREE_DEBUG: true
+      INVENTREE_LOG_LEVEL: WARNING
+      INVENTREE_CONSOLE_LOG: false
+      INVENTREE_SITE_URL: http://localhost:8000
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: inventree
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+
+    steps:
+      # Pasos de entorno en línea (no se reutiliza ./.github/actions/setup):
+      # ese composite action solo existe si se clonó/copió el árbol COMPLETO
+      # de InvenTree. Como este workflow puede vivir en una copia parcial del
+      # repo (solo las carpetas de pruebas + CI), se evita esa dependencia.
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ env.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.python_version }}
+          cache: pip
+          cache-dependency-path: |
+            src/backend/requirements.txt
+            src/backend/requirements-dev.txt
+
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext poppler-utils libpq-dev
+
+      - name: Instalar dependencias de Python
+        run: |
+          python3 -m pip install -U pip
+          pip3 install -U invoke wheel
+          pip3 install 'uv>=0.9.6'
+          export UV_SYSTEM_PYTHON=1
+          echo "UV_SYSTEM_PYTHON=1" >> "$GITHUB_ENV"
+          uv pip install --system psycopg 'django-redis>=5.0.0' playwright
+
+      - name: invoke install --dev
+        run: invoke install --dev
+
+      - name: invoke install
+        run: invoke install
+
+      - name: invoke migrate
+        run: invoke migrate
+
+      - name: invoke static --skip-plugins
+        run: invoke static --skip-plugins
+
+      - name: Install Playwright browser (Chromium)
+        run: playwright install --with-deps chromium
+
+      - name: "Ejecutar suite: stock (con coverage)"
+        run: python3 start_inventree.py --suite stock --coverage
+
+      - name: Subir evidencia (screenshots + resultados JSON)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test_output-stock
+          path: test_output/
+          retention-days: 14
+
+      - name: Subir datos crudos de coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-data-stock
+          path: .coverage*
+          retention-days: 14
+          include-hidden-files: true
+
+  order:
+    name: "Funcionales: order (FN4 PO + SO/RO/Transfer Order)"
+    runs-on: ubuntu-24.04
+
+    env:
+      INVENTREE_DB_ENGINE: django.db.backends.postgresql
+      INVENTREE_DB_NAME: inventree
+      INVENTREE_DB_USER: inventree
+      INVENTREE_DB_PASSWORD: password
+      INVENTREE_DB_HOST: "127.0.0.1"
+      INVENTREE_DB_PORT: 5432
+      INVENTREE_CACHE_HOST: localhost
+      INVENTREE_CACHE_PORT: 6379
+      INVENTREE_MEDIA_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_media-order
+      INVENTREE_STATIC_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_static-order
+      INVENTREE_BACKUP_DIR: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_backup-order
+      INVENTREE_DEBUG: true
+      INVENTREE_LOG_LEVEL: WARNING
+      INVENTREE_CONSOLE_LOG: false
+      INVENTREE_SITE_URL: http://localhost:8000
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: inventree
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+
+    steps:
+      # Pasos de entorno en línea (no se reutiliza ./.github/actions/setup):
+      # ese composite action solo existe si se clonó/copió el árbol COMPLETO
+      # de InvenTree. Como este workflow puede vivir en una copia parcial del
+      # repo (solo las carpetas de pruebas + CI), se evita esa dependencia.
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ env.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.python_version }}
+          cache: pip
+          cache-dependency-path: |
+            src/backend/requirements.txt
+            src/backend/requirements-dev.txt
+
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext poppler-utils libpq-dev
+
+      - name: Instalar dependencias de Python
+        run: |
+          python3 -m pip install -U pip
+          pip3 install -U invoke wheel
+          pip3 install 'uv>=0.9.6'
+          export UV_SYSTEM_PYTHON=1
+          echo "UV_SYSTEM_PYTHON=1" >> "$GITHUB_ENV"
+          uv pip install --system psycopg 'django-redis>=5.0.0' playwright
+
+      - name: invoke install --dev
+        run: invoke install --dev
+
+      - name: invoke install
+        run: invoke install
+
+      - name: invoke migrate
+        run: invoke migrate
+
+      - name: invoke static --skip-plugins
+        run: invoke static --skip-plugins
+
+      - name: Install Playwright browser (Chromium)
+        run: playwright install --with-deps chromium
+
+      - name: "Ejecutar suite: order (con coverage)"
+        run: python3 start_inventree.py --suite order --coverage
+
+      - name: Subir evidencia (screenshots + resultados JSON)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test_output-order
+          path: test_output/
+          retention-days: 14
+
+      - name: Subir datos crudos de coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-data-order
+          path: .coverage*
+          retention-days: 14
+          include-hidden-files: true
+
+  build:
+    name: "Funcionales: build (FN8 Build Orders)"
+    runs-on: ubuntu-24.04
+
+    env:
+      INVENTREE_DB_ENGINE: django.db.backends.postgresql
+      INVENTREE_DB_NAME: inventree
+      INVENTREE_DB_USER: inventree
+      INVENTREE_DB_PASSWORD: password
+      INVENTREE_DB_HOST: "127.0.0.1"
+      INVENTREE_DB_PORT: 5432
+      INVENTREE_CACHE_HOST: localhost
+      INVENTREE_CACHE_PORT: 6379
+      INVENTREE_MEDIA_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_media-build
+      INVENTREE_STATIC_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_static-build
+      INVENTREE_BACKUP_DIR: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_backup-build
+      INVENTREE_DEBUG: true
+      INVENTREE_LOG_LEVEL: WARNING
+      INVENTREE_CONSOLE_LOG: false
+      INVENTREE_SITE_URL: http://localhost:8000
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: inventree
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+
+    steps:
+      # Pasos de entorno en línea (no se reutiliza ./.github/actions/setup):
+      # ese composite action solo existe si se clonó/copió el árbol COMPLETO
+      # de InvenTree. Como este workflow puede vivir en una copia parcial del
+      # repo (solo las carpetas de pruebas + CI), se evita esa dependencia.
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ env.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.python_version }}
+          cache: pip
+          cache-dependency-path: |
+            src/backend/requirements.txt
+            src/backend/requirements-dev.txt
+
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext poppler-utils libpq-dev
+
+      - name: Instalar dependencias de Python
+        run: |
+          python3 -m pip install -U pip
+          pip3 install -U invoke wheel
+          pip3 install 'uv>=0.9.6'
+          export UV_SYSTEM_PYTHON=1
+          echo "UV_SYSTEM_PYTHON=1" >> "$GITHUB_ENV"
+          uv pip install --system psycopg 'django-redis>=5.0.0' playwright
+
+      - name: invoke install --dev
+        run: invoke install --dev
+
+      - name: invoke install
+        run: invoke install
+
+      - name: invoke migrate
+        run: invoke migrate
+
+      - name: invoke static --skip-plugins
+        run: invoke static --skip-plugins
+
+      - name: Install Playwright browser (Chromium)
+        run: playwright install --with-deps chromium
+
+      - name: "Ejecutar suite: build (con coverage)"
+        run: python3 start_inventree.py --suite build --coverage
+
+      - name: Subir evidencia (screenshots + resultados JSON)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test_output-build
+          path: test_output/
+          retention-days: 14
+
+      - name: Subir datos crudos de coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-data-build
+          path: .coverage*
+          retention-days: 14
+          include-hidden-files: true
+
+  company:
+    name: "Funcionales: company (FN7 Proveedores)"
+    runs-on: ubuntu-24.04
+
+    env:
+      INVENTREE_DB_ENGINE: django.db.backends.postgresql
+      INVENTREE_DB_NAME: inventree
+      INVENTREE_DB_USER: inventree
+      INVENTREE_DB_PASSWORD: password
+      INVENTREE_DB_HOST: "127.0.0.1"
+      INVENTREE_DB_PORT: 5432
+      INVENTREE_CACHE_HOST: localhost
+      INVENTREE_CACHE_PORT: 6379
+      INVENTREE_MEDIA_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_media-company
+      INVENTREE_STATIC_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_static-company
+      INVENTREE_BACKUP_DIR: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_backup-company
+      INVENTREE_DEBUG: true
+      INVENTREE_LOG_LEVEL: WARNING
+      INVENTREE_CONSOLE_LOG: false
+      INVENTREE_SITE_URL: http://localhost:8000
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: inventree
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+
+    steps:
+      # Pasos de entorno en línea (no se reutiliza ./.github/actions/setup):
+      # ese composite action solo existe si se clonó/copió el árbol COMPLETO
+      # de InvenTree. Como este workflow puede vivir en una copia parcial del
+      # repo (solo las carpetas de pruebas + CI), se evita esa dependencia.
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ env.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.python_version }}
+          cache: pip
+          cache-dependency-path: |
+            src/backend/requirements.txt
+            src/backend/requirements-dev.txt
+
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext poppler-utils libpq-dev
+
+      - name: Instalar dependencias de Python
+        run: |
+          python3 -m pip install -U pip
+          pip3 install -U invoke wheel
+          pip3 install 'uv>=0.9.6'
+          export UV_SYSTEM_PYTHON=1
+          echo "UV_SYSTEM_PYTHON=1" >> "$GITHUB_ENV"
+          uv pip install --system psycopg 'django-redis>=5.0.0' playwright
+
+      - name: invoke install --dev
+        run: invoke install --dev
+
+      - name: invoke install
+        run: invoke install
+
+      - name: invoke migrate
+        run: invoke migrate
+
+      - name: invoke static --skip-plugins
+        run: invoke static --skip-plugins
+
+      - name: Install Playwright browser (Chromium)
+        run: playwright install --with-deps chromium
+
+      - name: "Ejecutar suite: company (con coverage)"
+        run: python3 start_inventree.py --suite company --coverage
+
+      - name: Subir evidencia (screenshots + resultados JSON)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test_output-company
+          path: test_output/
+          retention-days: 14
+
+      - name: Subir datos crudos de coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-data-company
+          path: .coverage*
+          retention-days: 14
+          include-hidden-files: true
+
+  users:
+    name: "Funcionales: users (FN9 Autenticación / Identidad)"
+    runs-on: ubuntu-24.04
+
+    env:
+      INVENTREE_DB_ENGINE: django.db.backends.postgresql
+      INVENTREE_DB_NAME: inventree
+      INVENTREE_DB_USER: inventree
+      INVENTREE_DB_PASSWORD: password
+      INVENTREE_DB_HOST: "127.0.0.1"
+      INVENTREE_DB_PORT: 5432
+      INVENTREE_CACHE_HOST: localhost
+      INVENTREE_CACHE_PORT: 6379
+      INVENTREE_MEDIA_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_media-users
+      INVENTREE_STATIC_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_static-users
+      INVENTREE_BACKUP_DIR: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_backup-users
+      INVENTREE_DEBUG: true
+      INVENTREE_LOG_LEVEL: WARNING
+      INVENTREE_CONSOLE_LOG: false
+      INVENTREE_SITE_URL: http://localhost:8000
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: inventree
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+
+    steps:
+      # Pasos de entorno en línea (no se reutiliza ./.github/actions/setup):
+      # ese composite action solo existe si se clonó/copió el árbol COMPLETO
+      # de InvenTree. Como este workflow puede vivir en una copia parcial del
+      # repo (solo las carpetas de pruebas + CI), se evita esa dependencia.
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ env.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.python_version }}
+          cache: pip
+          cache-dependency-path: |
+            src/backend/requirements.txt
+            src/backend/requirements-dev.txt
+
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext poppler-utils libpq-dev
+
+      - name: Instalar dependencias de Python
+        run: |
+          python3 -m pip install -U pip
+          pip3 install -U invoke wheel
+          pip3 install 'uv>=0.9.6'
+          export UV_SYSTEM_PYTHON=1
+          echo "UV_SYSTEM_PYTHON=1" >> "$GITHUB_ENV"
+          uv pip install --system psycopg 'django-redis>=5.0.0' playwright
+
+      - name: invoke install --dev
+        run: invoke install --dev
+
+      - name: invoke install
+        run: invoke install
+
+      - name: invoke migrate
+        run: invoke migrate
+
+      - name: invoke static --skip-plugins
+        run: invoke static --skip-plugins
+
+      - name: Install Playwright browser (Chromium)
+        run: playwright install --with-deps chromium
+
+      - name: "Ejecutar suite: users (con coverage)"
+        run: python3 start_inventree.py --suite users --coverage
+
+      - name: Subir evidencia (screenshots + resultados JSON)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test_output-users
+          path: test_output/
+          retention-days: 14
+
+      - name: Subir datos crudos de coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-data-users
+          path: .coverage*
+          retention-days: 14
+          include-hidden-files: true
+
+  integracion:
+    name: "Integración (order↔stock, build↔stock, stock↔tracking)"
+    runs-on: ubuntu-24.04
+
+    env:
+      INVENTREE_DB_ENGINE: django.db.backends.postgresql
+      INVENTREE_DB_NAME: inventree
+      INVENTREE_DB_USER: inventree
+      INVENTREE_DB_PASSWORD: password
+      INVENTREE_DB_HOST: "127.0.0.1"
+      INVENTREE_DB_PORT: 5432
+      INVENTREE_CACHE_HOST: localhost
+      INVENTREE_CACHE_PORT: 6379
+      INVENTREE_MEDIA_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_media-integracion
+      INVENTREE_STATIC_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_static-integracion
+      INVENTREE_BACKUP_DIR: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_backup-integracion
+      INVENTREE_DEBUG: true
+      INVENTREE_LOG_LEVEL: WARNING
+      INVENTREE_CONSOLE_LOG: false
+      INVENTREE_SITE_URL: http://localhost:8000
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: inventree
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+
+    steps:
+      # Pasos de entorno en línea (no se reutiliza ./.github/actions/setup):
+      # ese composite action solo existe si se clonó/copió el árbol COMPLETO
+      # de InvenTree. Como este workflow puede vivir en una copia parcial del
+      # repo (solo las carpetas de pruebas + CI), se evita esa dependencia.
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ env.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.python_version }}
+          cache: pip
+          cache-dependency-path: |
+            src/backend/requirements.txt
+            src/backend/requirements-dev.txt
+
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext poppler-utils libpq-dev
+
+      - name: Instalar dependencias de Python
+        run: |
+          python3 -m pip install -U pip
+          pip3 install -U invoke wheel
+          pip3 install 'uv>=0.9.6'
+          export UV_SYSTEM_PYTHON=1
+          echo "UV_SYSTEM_PYTHON=1" >> "$GITHUB_ENV"
+          uv pip install --system psycopg 'django-redis>=5.0.0' playwright
+
+      - name: invoke install --dev
+        run: invoke install --dev
+
+      - name: invoke install
+        run: invoke install
+
+      - name: invoke migrate
+        run: invoke migrate
+
+      - name: invoke static --skip-plugins
+        run: invoke static --skip-plugins
+
+      - name: Install Playwright browser (Chromium)
+        run: playwright install --with-deps chromium
+
+      - name: "Ejecutar suite: integracion (con coverage)"
+        run: python3 start_inventree.py --suite integracion --coverage
+
+      - name: Subir evidencia (screenshots + resultados JSON)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test_output-integracion
+          path: test_output/
+          retention-days: 14
+
+      - name: Subir datos crudos de coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-data-integracion
+          path: .coverage*
+          retention-days: 14
+          include-hidden-files: true
+
+  golden_path:
+    name: "Sistema: golden_path (flujo E2E completo)"
+    runs-on: ubuntu-24.04
+
+    env:
+      INVENTREE_DB_ENGINE: django.db.backends.postgresql
+      INVENTREE_DB_NAME: inventree
+      INVENTREE_DB_USER: inventree
+      INVENTREE_DB_PASSWORD: password
+      INVENTREE_DB_HOST: "127.0.0.1"
+      INVENTREE_DB_PORT: 5432
+      INVENTREE_CACHE_HOST: localhost
+      INVENTREE_CACHE_PORT: 6379
+      INVENTREE_MEDIA_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_media-golden_path
+      INVENTREE_STATIC_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_static-golden_path
+      INVENTREE_BACKUP_DIR: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_backup-golden_path
+      INVENTREE_DEBUG: true
+      INVENTREE_LOG_LEVEL: WARNING
+      INVENTREE_CONSOLE_LOG: false
+      INVENTREE_SITE_URL: http://localhost:8000
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: inventree
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+
+    steps:
+      # Pasos de entorno en línea (no se reutiliza ./.github/actions/setup):
+      # ese composite action solo existe si se clonó/copió el árbol COMPLETO
+      # de InvenTree. Como este workflow puede vivir en una copia parcial del
+      # repo (solo las carpetas de pruebas + CI), se evita esa dependencia.
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ env.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.python_version }}
+          cache: pip
+          cache-dependency-path: |
+            src/backend/requirements.txt
+            src/backend/requirements-dev.txt
+
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext poppler-utils libpq-dev
+
+      - name: Instalar dependencias de Python
+        run: |
+          python3 -m pip install -U pip
+          pip3 install -U invoke wheel
+          pip3 install 'uv>=0.9.6'
+          export UV_SYSTEM_PYTHON=1
+          echo "UV_SYSTEM_PYTHON=1" >> "$GITHUB_ENV"
+          uv pip install --system psycopg 'django-redis>=5.0.0' playwright
+
+      - name: invoke install --dev
+        run: invoke install --dev
+
+      - name: invoke install
+        run: invoke install
+
+      - name: invoke migrate
+        run: invoke migrate
+
+      - name: invoke static --skip-plugins
+        run: invoke static --skip-plugins
+
+      - name: Install Playwright browser (Chromium)
+        run: playwright install --with-deps chromium
+
+      - name: "Ejecutar suite: golden_path (con coverage)"
+        run: python3 start_inventree.py --suite golden_path --coverage
+
+      - name: Subir evidencia (screenshots + resultados JSON)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test_output-golden_path
+          path: test_output/
+          retention-days: 14
+
+      - name: Subir datos crudos de coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-data-golden_path
+          path: .coverage*
+          retention-days: 14
+          include-hidden-files: true
+
+  seguridad:
+    name: "Sistema: seguridad (control de acceso, autenticación)"
+    runs-on: ubuntu-24.04
+
+    env:
+      INVENTREE_DB_ENGINE: django.db.backends.postgresql
+      INVENTREE_DB_NAME: inventree
+      INVENTREE_DB_USER: inventree
+      INVENTREE_DB_PASSWORD: password
+      INVENTREE_DB_HOST: "127.0.0.1"
+      INVENTREE_DB_PORT: 5432
+      INVENTREE_CACHE_HOST: localhost
+      INVENTREE_CACHE_PORT: 6379
+      INVENTREE_MEDIA_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_media-seguridad
+      INVENTREE_STATIC_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_static-seguridad
+      INVENTREE_BACKUP_DIR: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_backup-seguridad
+      INVENTREE_DEBUG: true
+      INVENTREE_LOG_LEVEL: WARNING
+      INVENTREE_CONSOLE_LOG: false
+      INVENTREE_SITE_URL: http://localhost:8000
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: inventree
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+
+    steps:
+      # Pasos de entorno en línea (no se reutiliza ./.github/actions/setup):
+      # ese composite action solo existe si se clonó/copió el árbol COMPLETO
+      # de InvenTree. Como este workflow puede vivir en una copia parcial del
+      # repo (solo las carpetas de pruebas + CI), se evita esa dependencia.
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ env.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.python_version }}
+          cache: pip
+          cache-dependency-path: |
+            src/backend/requirements.txt
+            src/backend/requirements-dev.txt
+
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext poppler-utils libpq-dev
+
+      - name: Instalar dependencias de Python
+        run: |
+          python3 -m pip install -U pip
+          pip3 install -U invoke wheel
+          pip3 install 'uv>=0.9.6'
+          export UV_SYSTEM_PYTHON=1
+          echo "UV_SYSTEM_PYTHON=1" >> "$GITHUB_ENV"
+          uv pip install --system psycopg 'django-redis>=5.0.0' playwright
+
+      - name: invoke install --dev
+        run: invoke install --dev
+
+      - name: invoke install
+        run: invoke install
+
+      - name: invoke migrate
+        run: invoke migrate
+
+      - name: invoke static --skip-plugins
+        run: invoke static --skip-plugins
+
+      - name: Install Playwright browser (Chromium)
+        run: playwright install --with-deps chromium
+
+      - name: "Ejecutar suite: seguridad (con coverage)"
+        run: python3 start_inventree.py --suite seguridad --coverage
+
+      - name: Subir evidencia (screenshots + resultados JSON)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test_output-seguridad
+          path: test_output/
+          retention-days: 14
+
+      - name: Subir datos crudos de coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-data-seguridad
+          path: .coverage*
+          retention-days: 14
+          include-hidden-files: true
+
+  desempeno:
+    name: "Sistema: desempeño (tiempos de respuesta, carga)"
+    runs-on: ubuntu-24.04
+
+    env:
+      INVENTREE_DB_ENGINE: django.db.backends.postgresql
+      INVENTREE_DB_NAME: inventree
+      INVENTREE_DB_USER: inventree
+      INVENTREE_DB_PASSWORD: password
+      INVENTREE_DB_HOST: "127.0.0.1"
+      INVENTREE_DB_PORT: 5432
+      INVENTREE_CACHE_HOST: localhost
+      INVENTREE_CACHE_PORT: 6379
+      INVENTREE_MEDIA_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_media-desempeno
+      INVENTREE_STATIC_ROOT: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_static-desempeno
+      INVENTREE_BACKUP_DIR: /home/runner/work/InvenTree-VIUDANEGRA/test_inventree_backup-desempeno
+      INVENTREE_DEBUG: true
+      INVENTREE_LOG_LEVEL: WARNING
+      INVENTREE_CONSOLE_LOG: false
+      INVENTREE_SITE_URL: http://localhost:8000
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: inventree
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+
+    steps:
+      # Pasos de entorno en línea (no se reutiliza ./.github/actions/setup):
+      # ese composite action solo existe si se clonó/copió el árbol COMPLETO
+      # de InvenTree. Como este workflow puede vivir en una copia parcial del
+      # repo (solo las carpetas de pruebas + CI), se evita esa dependencia.
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ env.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.python_version }}
+          cache: pip
+          cache-dependency-path: |
+            src/backend/requirements.txt
+            src/backend/requirements-dev.txt
+
+      - name: Instalar dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gettext poppler-utils libpq-dev
+
+      - name: Instalar dependencias de Python
+        run: |
+          python3 -m pip install -U pip
+          pip3 install -U invoke wheel
+          pip3 install 'uv>=0.9.6'
+          export UV_SYSTEM_PYTHON=1
+          echo "UV_SYSTEM_PYTHON=1" >> "$GITHUB_ENV"
+          uv pip install --system psycopg 'django-redis>=5.0.0' playwright
+
+      - name: invoke install --dev
+        run: invoke install --dev
+
+      - name: invoke install
+        run: invoke install
+
+      - name: invoke migrate
+        run: invoke migrate
+
+      - name: invoke static --skip-plugins
+        run: invoke static --skip-plugins
+
+      - name: Install Playwright browser (Chromium)
+        run: playwright install --with-deps chromium
+
+      - name: "Ejecutar suite: desempeno (con coverage)"
+        run: python3 start_inventree.py --suite desempeno --coverage
+
+      - name: Subir evidencia (screenshots + resultados JSON)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test_output-desempeno
+          path: test_output/
+          retention-days: 14
+
+      - name: Subir datos crudos de coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-data-desempeno
           path: .coverage*
           retention-days: 14
           include-hidden-files: true

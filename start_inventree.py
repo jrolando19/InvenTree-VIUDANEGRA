@@ -76,6 +76,14 @@ SUITES = ([f for _key, f, _desc in FUNCTIONAL_SUITES]
 # porcentajes bajos/engañosos porque esa suite no los ejercita).
 SUITE_TO_MODULE = {f: key for key, f, _desc in FUNCTIONAL_SUITES}
 
+# Lookup por clave (p. ej. "part", "stock", "integracion", "golden_path") ->
+# ruta de la suite. Permite correr UNA sola suite por CLI (--suite <clave>),
+# pensado para que un workflow de CI la use en jobs paralelos, uno por módulo.
+ALL_SUITES_BY_KEY = {
+    key: f
+    for key, f, _desc in FUNCTIONAL_SUITES + INTEGRATION_SUITES + SYSTEM_SUITES
+}
+
 # Módulos mapeados a RF del Hito 2 (wiki del curso). El objetivo de 85% se
 # mide solo sobre estos — InvenTree/common/machine/plugin/report/importer/
 # data_exporter no tienen RF asociado y no cuentan para el total.
@@ -681,10 +689,10 @@ def run_once(args, action):
         print()
         return
 
-    # 3. Servidor (arranque simple, o --tests/--coverage por CLI sobre TODAS las suites)
-    # Con --coverage + --tests, run_suites() reinicia el server antes de cada
-    # suite con su propio data-file, así que acá no hace falta levantarlo.
-    if args.coverage and args.tests:
+    # 3. Servidor (arranque simple, o --tests/--suite + --coverage por CLI)
+    # Con --coverage + --tests/--suite, run_suites() reinicia el server antes
+    # de cada suite con su propio data-file, así que acá no hace falta levantarlo.
+    if args.coverage and (args.tests or args.suite):
         print(f"\n  {INFO} --coverage: el servidor se reiniciará instrumentado antes de cada suite")
     elif is_server_running():
         print(f"\n  {OK}  Servidor ya está corriendo en {URL}")
@@ -703,7 +711,7 @@ def run_once(args, action):
             stop_server_pid(pid)
             sys.exit(1)
 
-    if not (args.coverage and args.tests):
+    if not (args.coverage and (args.tests or args.suite)):
         print(f"\n  {OK}  InvenTree disponible en: http://localhost:8000")
         print(f"  {OK}  Admin UI:               http://localhost:8000/web/")
         print(f"  {OK}  API:                    http://localhost:8000/api/")
@@ -712,13 +720,24 @@ def run_once(args, action):
         else:
             print(f"  {WARN}  El setup falló — las credenciales admin / inventree podrían no existir\n")
 
-    # 4. Pruebas si se pidieron por CLI (--tests, todas las suites en orden)
+    # 4. Pruebas si se pidieron por CLI (--tests: todas las suites en orden;
+    # --suite: una sola, pensado para jobs de CI en paralelo por módulo)
     if args.tests:
         if not run_suites(coverage=args.coverage):
+            sys.exit(1)
+    elif args.suite:
+        suite_path = ALL_SUITES_BY_KEY[args.suite]
+        if not run_suites(
+            coverage=args.coverage,
+            suites=[suite_path],
+            title=f"EJECUTANDO SUITE: {args.suite}",
+            combined_label=f"COVERAGE: {args.suite}",
+        ):
             sys.exit(1)
     else:
         print(f"  {INFO} Para ejecutar las pruebas: python start_inventree.py --tests")
         print(f"  {INFO} Para ejecutar con coverage por suite: python start_inventree.py --tests --coverage")
+        print(f"  {INFO} Para ejecutar UNA suite: python start_inventree.py --suite <clave> --coverage")
         print(f"  {INFO} Para detener el servidor:  kill $(cat .inventree_server.pid)")
 
     print()
@@ -728,12 +747,14 @@ def main():
     parser = argparse.ArgumentParser(description="Levanta InvenTree en localhost:8000")
     parser.add_argument("--setup", action="store_true", help="Inicializar datos de prueba")
     parser.add_argument("--tests", action="store_true", help="Ejecutar todas las suites")
+    parser.add_argument("--suite", choices=sorted(ALL_SUITES_BY_KEY),
+                         help="Ejecutar UNA sola suite por clave (para jobs de CI en paralelo, uno por módulo)")
     parser.add_argument("--coverage", action="store_true",
-                         help="Medir coverage por módulo, aislado por cada suite (usar con --tests)")
+                         help="Medir coverage por módulo, aislado por cada suite (usar con --tests o --suite)")
     args = parser.parse_args()
 
     # Con flags de CLI -> una sola corrida, sin menú (comportamiento de script/CI)
-    if args.setup or args.tests or args.coverage:
+    if args.setup or args.tests or args.suite or args.coverage:
         run_once(args, action=None)
         return
 
@@ -745,7 +766,7 @@ def main():
             print("\n  Saliendo.\n")
             return
         action = choice["action"]
-        menu_args = argparse.Namespace(setup=choice.get("setup", False), tests=False, coverage=False)
+        menu_args = argparse.Namespace(setup=choice.get("setup", False), tests=False, suite=None, coverage=False)
         run_once(menu_args, action)
 
 
