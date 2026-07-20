@@ -34,7 +34,9 @@ logger = structlog.get_logger('inventree')
 # invoque. No mapea a ningun RF del wiki Hito 2 (FN4 solo pide CRUD/flujo de
 # PO/SO/RO/Transfer Order via API). Excluida del coverage por alcance.
 @tracer.start_as_current_span('notify_overdue_purchase_order')
-def notify_overdue_purchase_order(po: order.models.PurchaseOrder) -> None:  # pragma: no cover
+def notify_overdue_purchase_order(
+    po: order.models.PurchaseOrder,
+) -> None:  # pragma: no cover
     """Notify users that a PurchaseOrder has just become 'overdue'.
 
     Arguments:
@@ -179,7 +181,9 @@ def check_overdue_sales_orders():  # pragma: no cover
 
 # Nota: mismo criterio de exclusion por alcance que notify_overdue_purchase_order.
 @tracer.start_as_current_span('notify_overdue_return_order')
-def notify_overdue_return_order(ro: order.models.ReturnOrder) -> None:  # pragma: no cover
+def notify_overdue_return_order(
+    ro: order.models.ReturnOrder,
+) -> None:  # pragma: no cover
     """Notify appropriate users that a ReturnOrder has just become 'overdue'."""
     targets: list[User | Group | Owner] = []
 

@@ -23,7 +23,6 @@ from django.utils.translation import gettext_lazy as _
 
 import structlog
 from djmoney.contrib.exchange.models import convert_money
-from InvenTree.helpers_db import bulk_create_and_fetch
 from mptt.managers import TreeManager
 from mptt.models import TreeForeignKey
 
@@ -1838,7 +1837,9 @@ class StockItem(
     # via API (stock/api.py, endpoint 'disassemble/'), pero no ejercitada por las
     # suites FN2/FN3 (que no cubren la operacion de desarme de stock). Excluidas del
     # coverage por alcance, no por ser codigo muerto -- el codigo se mantiene intacto.
-    def allocate_disassembly_pricing(self, quantity, lines: list) -> list:  # pragma: no cover
+    def allocate_disassembly_pricing(
+        self, quantity, lines: list
+    ) -> list:  # pragma: no cover
         """Allocate the purchase price of this stock item across disassembly lines.
 
         Automatic cost allocation is only performed if:
