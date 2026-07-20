@@ -6,10 +6,14 @@
 # una instancia real de InvenTree levantada con `start_inventree.py`, tal
 # como se ejecutan en local.
 #
-# Un job por módulo/suite (en vez de un único job secuencial) para que la
-# vista de Actions muestre el desglose por módulo de un vistazo -- a costa de
-# repetir el setup (install/migrate/static) en cada job, ya que cada uno
-# corre en un runner nuevo e independiente.
+# Estructura del grafo (un job por módulo/suite, en vez de un único job
+# secuencial, para que la vista de Actions muestre el desglose de un
+# vistazo -- a costa de repetir el setup en cada job hoja, ya que cada uno
+# corre en un runner nuevo e independiente, con su propia base de datos):
+#
+#   inicio (chequeo rápido, sin install)
+#     ├─ test_modulos (puerta) -> part, stock, order, build, company, users
+#     └─ test_sistema (puerta) -> integracion, golden_path, seguridad, desempeno
 
 name: Custom QA Suites
 
@@ -37,9 +41,38 @@ permissions:
   contents: read
 
 jobs:
+  inicio:
+    name: "Inicio (chequeo rápido)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ env.python_version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.python_version }}
+
+      - name: Verificar sintaxis de start_inventree.py
+        run: python3 -c "import ast; ast.parse(open('start_inventree.py').read())"
+
+  test_modulos:
+    name: "Test módulos (puerta)"
+    runs-on: ubuntu-24.04
+    needs: inicio
+    steps:
+      - run: echo "Disparando suites funcionales por módulo..."
+
+  test_sistema:
+    name: "Test sistema (puerta)"
+    runs-on: ubuntu-24.04
+    needs: inicio
+    steps:
+      - run: echo "Disparando suites de integración y sistema..."
+
   part:
     name: "Funcionales: part (FN1 Partes + FN6 Categorías + FN5 BOM)"
     runs-on: ubuntu-24.04
+    needs: test_modulos
 
     env:
       INVENTREE_DB_ENGINE: django.db.backends.postgresql
@@ -140,6 +173,7 @@ jobs:
   stock:
     name: "Funcionales: stock (FN2/FN3 Stock)"
     runs-on: ubuntu-24.04
+    needs: test_modulos
 
     env:
       INVENTREE_DB_ENGINE: django.db.backends.postgresql
@@ -240,6 +274,7 @@ jobs:
   order:
     name: "Funcionales: order (FN4 PO + SO/RO/Transfer Order)"
     runs-on: ubuntu-24.04
+    needs: test_modulos
 
     env:
       INVENTREE_DB_ENGINE: django.db.backends.postgresql
@@ -340,6 +375,7 @@ jobs:
   build:
     name: "Funcionales: build (FN8 Build Orders)"
     runs-on: ubuntu-24.04
+    needs: test_modulos
 
     env:
       INVENTREE_DB_ENGINE: django.db.backends.postgresql
@@ -440,6 +476,7 @@ jobs:
   company:
     name: "Funcionales: company (FN7 Proveedores)"
     runs-on: ubuntu-24.04
+    needs: test_modulos
 
     env:
       INVENTREE_DB_ENGINE: django.db.backends.postgresql
@@ -540,6 +577,7 @@ jobs:
   users:
     name: "Funcionales: users (FN9 Autenticación / Identidad)"
     runs-on: ubuntu-24.04
+    needs: test_modulos
 
     env:
       INVENTREE_DB_ENGINE: django.db.backends.postgresql
@@ -640,6 +678,7 @@ jobs:
   integracion:
     name: "Integración (order↔stock, build↔stock, stock↔tracking)"
     runs-on: ubuntu-24.04
+    needs: test_sistema
 
     env:
       INVENTREE_DB_ENGINE: django.db.backends.postgresql
@@ -740,6 +779,7 @@ jobs:
   golden_path:
     name: "Sistema: golden_path (flujo E2E completo)"
     runs-on: ubuntu-24.04
+    needs: test_sistema
 
     env:
       INVENTREE_DB_ENGINE: django.db.backends.postgresql
@@ -840,6 +880,7 @@ jobs:
   seguridad:
     name: "Sistema: seguridad (control de acceso, autenticación)"
     runs-on: ubuntu-24.04
+    needs: test_sistema
 
     env:
       INVENTREE_DB_ENGINE: django.db.backends.postgresql
@@ -940,6 +981,7 @@ jobs:
   desempeno:
     name: "Sistema: desempeño (tiempos de respuesta, carga)"
     runs-on: ubuntu-24.04
+    needs: test_sistema
 
     env:
       INVENTREE_DB_ENGINE: django.db.backends.postgresql
