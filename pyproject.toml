@@ -138,7 +138,7 @@ known_django="django"
 sections=["FUTURE","STDLIB","DJANGO","THIRDPARTY","FIRSTPARTY","LOCALFOLDER"]
 
 [tool.codespell]
-ignore-words-list = ["assertIn","SME","intoto","fitH"]
+ignore-words-list = ["assertIn","SME","intoto","fitH","ser","secuencial"]
 
 [tool.pytest]
 django_find_project = false
