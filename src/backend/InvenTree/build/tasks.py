@@ -88,16 +88,13 @@ def complete_build_allocations(build_id: int, user_id: int):
     if user_id:
         try:
             user = User.objects.get(pk=user_id)
-        except User.DoesNotExist:  # pragma: no cover
-            # Nota: user_id siempre viene de un usuario autenticado real; inalcanzable via API.
+        except User.DoesNotExist:
             user = None
             logger.warning(
                 'Could not complete build allocations for BuildOrder <%s> - User does not exist',
                 build_id,
             )
-    else:  # pragma: no cover
-        # Nota: los llamadores siempre pasan user_id=request.user.pk cuando hay
-        # un usuario autenticado; la API ya rechaza solicitudes no autenticadas.
+    else:
         user = None
 
     build_order.complete_allocations(user)
@@ -118,9 +115,21 @@ def delete_build_outputs(build_id: int, output_ids: list, **kwargs):
 
     with transaction.atomic():
         for output_id in output_ids:
-            output = StockItem.objects.filter(pk=output_id).first()
-            if output:
-                build.delete_output(output)
+            # Lock the output row, and re-check that it is still "in production" -
+            # it may have been processed already (e.g. by a duplicated task)
+            output = StockItem.objects.select_for_update().filter(pk=output_id).first()
+
+            if not output:
+                continue
+
+            if not output.is_building:
+                logger.warning(
+                    'Build output <%s> is no longer in production - skipping deletion',
+                    output.pk,
+                )
+                continue
+
+            build.delete_output(output)
 
 
 @tracer.start_as_current_span('scrap_build_outputs')
@@ -152,16 +161,33 @@ def scrap_build_outputs(
 
     with transaction.atomic():
         for item in outputs:
-            output = StockItem.objects.filter(pk=item['output_id']).first()
-            if output:
-                build.scrap_build_output(
-                    output,
-                    item.get('quantity'),
-                    location,
-                    user=user,
-                    notes=notes,
-                    discard_allocations=discard_allocations,
+            # Lock the output row, and re-check that it is still "in production" -
+            # it may have been processed already (e.g. by a duplicated task)
+            output = (
+                StockItem.objects
+                .select_for_update()
+                .filter(pk=item['output_id'])
+                .first()
+            )
+
+            if not output:
+                continue
+
+            if not output.is_building:
+                logger.warning(
+                    'Build output <%s> is no longer in production - skipping scrap',
+                    output.pk,
                 )
+                continue
+
+            build.scrap_build_output(
+                output,
+                item.get('quantity'),
+                location,
+                user=user,
+                notes=notes,
+                discard_allocations=discard_allocations,
+            )
 
 
 @tracer.start_as_current_span('complete_build_outputs')
@@ -197,17 +223,34 @@ def complete_build_outputs(
 
     with transaction.atomic():
         for item in outputs:
-            output = StockItem.objects.filter(pk=item['output_id']).first()
-            if output:
-                build.complete_build_output(
-                    output,
-                    user,
-                    quantity=item.get('quantity'),
-                    location=location,
-                    status=status,
-                    notes=notes,
-                    required_tests=required_tests,
+            # Lock the output row, and re-check that it is still "in production" -
+            # it may have been processed already (e.g. by a duplicated task)
+            output = (
+                StockItem.objects
+                .select_for_update()
+                .filter(pk=item['output_id'])
+                .first()
+            )
+
+            if not output:
+                continue
+
+            if not output.is_building:
+                logger.warning(
+                    'Build output <%s> is no longer in production - skipping completion',
+                    output.pk,
                 )
+                continue
+
+            build.complete_build_output(
+                output,
+                user,
+                quantity=item.get('quantity'),
+                location=location,
+                status=status,
+                notes=notes,
+                required_tests=required_tests,
+            )
 
 
 @tracer.start_as_current_span('cancel_build')
@@ -362,10 +405,8 @@ def update_build_order_lines(bom_item_pk: int):
         )
 
 
-# Nota: unico llamador (Build._action_issue) usa force_async=True siempre;
-# nunca se ejecuta de forma sincrona en el entorno de pruebas black-box.
 @tracer.start_as_current_span('check_build_stock')
-def check_build_stock(build):  # pragma: no cover
+def check_build_stock(build):
     """Check the required stock for a newly created build order.
 
     Send an email out to any subscribed users if stock is low.
@@ -449,10 +490,8 @@ def check_build_stock(build):  # pragma: no cover
     )
 
 
-# Nota: unico caller es check_overdue_build_orders (scheduled task diario, sin
-# endpoint HTTP), ya excluido.
 @tracer.start_as_current_span('notify_overdue_build_order')
-def notify_overdue_build_order(bo):  # pragma: no cover
+def notify_overdue_build_order(bo):
     """Notify appropriate users that a Build has just become 'overdue'."""
     targets = []
 
@@ -485,11 +524,9 @@ def notify_overdue_build_order(bo):  # pragma: no cover
     trigger_event(event_name, build_order=bo.pk)
 
 
-# Nota: tarea programada diaria (@scheduled_task), sin endpoint HTTP que la
-# invoque; no mapea a ningun RF de FN8.
 @tracer.start_as_current_span('check_overdue_build_orders')
 @InvenTree.tasks.scheduled_task(InvenTree.tasks.ScheduledTask.DAILY)
-def check_overdue_build_orders():  # pragma: no cover
+def check_overdue_build_orders():
     """Check if any outstanding BuildOrders have just become overdue.
 
     - This check is performed daily
