@@ -46,7 +46,10 @@ User.add_to_class('__str__', user_model_str)  # Overriding User.__str__
 #  OVERRIDE END
 
 
-if settings.LDAP_AUTH:
+# Nota: bloque gateado por settings.LDAP_AUTH (configuracion de servidor, no
+# un ajuste modificable via API); inalcanzable en el entorno de pruebas
+# black-box sin un servidor LDAP real configurado.
+if settings.LDAP_AUTH:  # pragma: no cover
     from django_auth_ldap.backend import populate_user  # ty: ignore[unresolved-import]
 
     @receiver(populate_user)

@@ -35,7 +35,10 @@ class PartConfig(AppConfig):
             self.update_trackable_status()
             self.reset_part_pricing_flags()
 
-    def update_trackable_status(self):
+    # Nota: hooks de arranque de la app (AppConfig.ready()), ejecutados una sola
+    # vez al iniciar el proceso, nunca disparados por una solicitud HTTP. No
+    # mapean a ningun RF de FN1/FN5/FN6.
+    def update_trackable_status(self):  # pragma: no cover
         """Check for any instances where a trackable part is used in the BOM for a non-trackable part.
 
         In such a case, force the top-level part to be trackable too.
@@ -52,11 +55,11 @@ class PartConfig(AppConfig):
                 item.part.trackable = True
                 item.part.clean()
                 item.part.save()
-        except (OperationalError, ProgrammingError):  # pragma: no cover
+        except (OperationalError, ProgrammingError):
             # Exception if the database has not been migrated yet
             pass
 
-    def reset_part_pricing_flags(self):
+    def reset_part_pricing_flags(self):  # pragma: no cover
         """Performed on startup, to ensure that all pricing objects are in a "good" state.
 
         Prevents issues with state machine if the server is restarted mid-update

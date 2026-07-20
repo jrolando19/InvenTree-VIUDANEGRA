@@ -31,7 +31,9 @@ class ApiTokenAdmin(admin.ModelAdmin):
         'metadata',
     )
 
-    def get_fields(self, request, obj=None):
+    # Nota: hooks del sitio de administracion de Django (/admin/...), no de la
+    # API DRF; no mapean a ningun RF de FN9.
+    def get_fields(self, request, obj=None):  # pragma: no cover
         """Return list of fields to display."""
         fields = ['token'] if obj else ['key']
 
@@ -47,7 +49,7 @@ class ApiTokenAdmin(admin.ModelAdmin):
 
         return fields
 
-    def get_readonly_fields(self, request, obj=None):
+    def get_readonly_fields(self, request, obj=None):  # pragma: no cover
         """Some fields are read-only after creation."""
         ro = ['created', 'last_seen']
 
@@ -141,7 +143,8 @@ class InvenTreeUserAdmin(UserAdmin):
         (_('Important dates'), {'fields': ('last_login', 'date_joined')}),
     )
 
-    def get_readonly_fields(self, request, obj=None):
+    # Nota: hook del sitio de administracion de Django, no de la API DRF.
+    def get_readonly_fields(self, request, obj=None):  # pragma: no cover
         """Make all fields read-only for non-superusers."""
         fields = super().get_readonly_fields(request, obj)
 

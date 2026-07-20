@@ -62,7 +62,9 @@ def perform_stocktake(
         try:
             part = part_models.Part.objects.get(id=part_id)
             parts = part.get_descendants(include_self=True)
-        except (ValueError, part_models.Part.DoesNotExist):
+        except (ValueError, part_models.Part.DoesNotExist):  # pragma: no cover
+            # Nota: PartStocktakeGenerateSerializer.part ya es un PrimaryKeyRelatedField
+            # que valida existencia antes de invocar esta funcion; inalcanzable via API.
             parts = part_models.Part.objects.all()
     else:
         parts = part_models.Part.objects.all()
@@ -81,14 +83,16 @@ def perform_stocktake(
             parts = parts.filter(
                 category__in=category.get_descendants(include_self=True)
             )
-        except (ValueError, part_models.PartCategory.DoesNotExist):
+        except (ValueError, part_models.PartCategory.DoesNotExist):  # pragma: no cover
+            # Nota: 'category' ya viene pre-validado por el serializer.
             pass
 
     # Fetch location if provided
     if location_id is not None:
         try:
             location = stock_models.StockLocation.objects.get(id=location_id)
-        except (ValueError, stock_models.StockLocation.DoesNotExist):
+        except (ValueError, stock_models.StockLocation.DoesNotExist):  # pragma: no cover
+            # Nota: 'location' ya viene pre-validado por el serializer.
             location = None
     else:
         location = None
@@ -109,7 +113,9 @@ def perform_stocktake(
     if report_output_id is not None:
         try:
             report_output = common.models.DataOutput.objects.get(id=report_output_id)
-        except (ValueError, common.models.DataOutput.DoesNotExist):
+        except (ValueError, common.models.DataOutput.DoesNotExist):  # pragma: no cover
+            # Nota: DataOutput se crea sincronamente justo antes de esta llamada;
+            # su pk siempre es valido en el contexto de una unica solicitud HTTP.
             report_output = None
     else:
         report_output = None

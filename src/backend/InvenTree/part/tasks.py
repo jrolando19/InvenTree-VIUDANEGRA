@@ -27,8 +27,14 @@ tracer = trace.get_tracer(__name__)
 logger = structlog.get_logger('inventree')
 
 
+# Nota: after_save_part() invoca notify_low_stock_if_required() con
+# force_async=not settings.TESTING -- en el entorno de pruebas black-box (server
+# real via manage.py runserver, no Django TestCase) settings.TESTING es False,
+# por lo que la tarea siempre se encola de forma asincrona (requiere un worker
+# django-q real, ausente en este entorno) y nunca se ejecuta de forma sincrona.
+# No alcanzable via HTTP black-box; no mapea a ningun RF de FN1.
 @tracer.start_as_current_span('notify_low_stock')
-def notify_low_stock(part: Model):
+def notify_low_stock(part: Model):  # pragma: no cover
     """Notify interested users that a part is 'low stock'.
 
     Rules:
@@ -56,8 +62,9 @@ def notify_low_stock(part: Model):
     )
 
 
+# Nota: unico caller es check_stale_stock (scheduled task diario, ya excluido).
 @tracer.start_as_current_span('notify_stale_stock')
-def notify_stale_stock(user, stale_items):
+def notify_stale_stock(user, stale_items):  # pragma: no cover
     """Notify a user about all their stale stock items in one consolidated email.
 
     Rules:
@@ -132,8 +139,11 @@ def notify_stale_stock(user, stale_items):
         )
 
 
+# Nota: unico caller (after_save_part signal) usa force_async=not settings.TESTING;
+# en el entorno black-box esto siempre se encola de forma asincrona (ver nota en
+# notify_low_stock). No alcanzable via HTTP.
 @tracer.start_as_current_span('notify_low_stock_if_required')
-def notify_low_stock_if_required(part_id: int):
+def notify_low_stock_if_required(part_id: int):  # pragma: no cover
     """Check if the stock quantity has fallen below the minimum threshold of part.
 
     If true, notify the users who have subscribed to the part
@@ -156,9 +166,11 @@ def notify_low_stock_if_required(part_id: int):
             offload_task(notify_low_stock, p, group='notification')
 
 
+# Nota: tarea programada diaria (@scheduled_task), sin endpoint HTTP que la
+# invoque; no mapea a ningun RF de FN1 (CRUD de partes/BOM/categorias/pricing).
 @tracer.start_as_current_span('check_stale_stock')
 @scheduled_task(ScheduledTask.DAILY)
-def check_stale_stock():
+def check_stale_stock():  # pragma: no cover
     """Check all stock items for stale stock.
 
     This function runs daily and checks if any stock items are approaching their expiry date
@@ -226,8 +238,13 @@ def check_stale_stock():
     )
 
 
+# Nota: unico caller (PartPricing.schedule_for_update) usa
+# force_async=(not settings.TESTING or not settings.TESTING_PRICING), que es
+# siempre True en el entorno black-box (settings.TESTING=False) -- nunca se
+# ejecuta de forma sincrona. El recalculo de pricing en si se ejecuta via otras
+# rutas sincronas ya cubiertas (PartPricing.update_pricing / schedule_for_update).
 @tracer.start_as_current_span('update_part_pricing')
-def update_part_pricing(pricing: Model, counter: int = 0):
+def update_part_pricing(pricing: Model, counter: int = 0):  # pragma: no cover
     """Update cached pricing data for the specified PartPricing instance.
 
     Arguments:
@@ -243,9 +260,10 @@ def update_part_pricing(pricing: Model, counter: int = 0):
     )
 
 
+# Nota: mismo criterio de exclusion por alcance que check_stale_stock.
 @tracer.start_as_current_span('check_missing_pricing')
 @scheduled_task(ScheduledTask.DAILY)
-def check_missing_pricing(limit=250):
+def check_missing_pricing(limit=250):  # pragma: no cover
     """Check for parts with missing or outdated pricing information.
 
     Tests for the following conditions:
@@ -306,9 +324,10 @@ def check_missing_pricing(limit=250):
             pricing.schedule_for_update()
 
 
+# Nota: mismo criterio de exclusion por alcance que check_stale_stock.
 @tracer.start_as_current_span('scheduled_stocktake_reports')
 @scheduled_task(ScheduledTask.DAILY)
-def scheduled_stocktake_reports():
+def scheduled_stocktake_reports():  # pragma: no cover
     """Scheduled tasks for creating automated 'stocktake' entries.
 
     A "stocktake" entry is a snapshot of the current stock levels for a given Part.
@@ -356,8 +375,10 @@ def scheduled_stocktake_reports():
     record_task_success('STOCKTAKE_RECENT_REPORT')
 
 
+# Nota: unico caller (after_save_part signal) usa force_async=True siempre;
+# nunca se ejecuta de forma sincrona en el entorno de pruebas black-box.
 @tracer.start_as_current_span('rebuild_supplier_parts')
-def rebuild_supplier_parts(part_id: int):
+def rebuild_supplier_parts(part_id: int):  # pragma: no cover
     """Rebuild all SupplierPart objects for a given part.
 
     This function is called when a bart part is changed,
@@ -398,7 +419,9 @@ def check_bom_valid(part_id: int):
 
     try:
         part = Part.objects.get(pk=part_id)
-    except Part.DoesNotExist:
+    except Part.DoesNotExist:  # pragma: no cover
+        # Nota: unicos llamadores (BomItem.save()/delete()) siempre pasan un pk
+        # de assembly real y guardado; inalcanzable via API.
         logger.warning('check_bom_valid: Part with ID %s does not exist', part_id)
         return
 
@@ -426,16 +449,23 @@ def validate_bom(part_id: int, valid: bool, user_id: Optional[int] = None):
 
     try:
         part = Part.objects.get(pk=part_id)
-    except Part.DoesNotExist:
+    except Part.DoesNotExist:  # pragma: no cover
+        # Nota: unico llamador (part/api.py PartBomValidate) siempre pasa un pk
+        # de part real y guardado; inalcanzable via API.
         logger.warning('validate_bom: Part with ID %s does not exist', part_id)
         return
 
     if user_id:
         try:
             user = User.objects.get(pk=user_id)
-        except User.DoesNotExist:
+        except User.DoesNotExist:  # pragma: no cover
+            # Nota: user_id siempre viene de request.user.pk (usuario autenticado
+            # real); inalcanzable via API.
             user = None
-    else:
+    else:  # pragma: no cover
+        # Nota: el unico llamador siempre pasa user_id=request.user.pk cuando hay
+        # un usuario autenticado; solo seria None sin autenticacion, lo cual la
+        # API ya rechaza antes de llegar aqui.
         user = None
 
     part.validate_bom(user, valid=valid)

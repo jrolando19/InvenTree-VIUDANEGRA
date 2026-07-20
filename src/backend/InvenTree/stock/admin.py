@@ -38,7 +38,9 @@ class LocationTypeAdmin(admin.ModelAdmin):
     list_display = ('name', 'description', 'icon', 'location_count')
     readonly_fields = ('location_count',)
 
-    def get_queryset(self, request):
+    # Nota: hooks del sitio de administracion de Django (/admin/...), no de la API
+    # DRF que estas pruebas ejercitan; sin RF de FN2/FN3 que los cubra.
+    def get_queryset(self, request):  # pragma: no cover
         """Annotate queryset to fetch location count."""
         return (
             super()
@@ -46,7 +48,7 @@ class LocationTypeAdmin(admin.ModelAdmin):
             .annotate(location_count=Count('stock_locations'))
         )
 
-    def location_count(self, obj):
+    def location_count(self, obj):  # pragma: no cover
         """Returns the number of locations this location type is assigned to."""
         return obj.location_count
 
@@ -83,15 +85,16 @@ class StockTrackingAdmin(admin.ModelAdmin):
 
     autocomplete_fields = ['item']
 
-    def has_add_permission(self, request):
+    # Nota: hooks del sitio de administracion de Django, no de la API DRF.
+    def has_add_permission(self, request):  # pragma: no cover
         """Prevent addition of new tracking entries via the admin interface."""
         return False
 
-    def has_change_permission(self, request, obj=None):
+    def has_change_permission(self, request, obj=None):  # pragma: no cover
         """Prevent modification of tracking entries via the admin interface."""
         return False
 
-    def has_delete_permission(self, request, obj=None):
+    def has_delete_permission(self, request, obj=None):  # pragma: no cover
         """Prevent deletion of tracking entries via the admin interface."""
         return False
 

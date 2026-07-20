@@ -38,7 +38,9 @@ def generate_batch_code(**kwargs):
         **kwargs,
     }
 
-    for plugin in registry.with_mixin(PluginMixinEnum.VALIDATION):
+    # Nota: requiere un plugin con mixin VALIDATION registrado; sin infraestructura
+    # de plugins en el entorno de pruebas black-box, este loop nunca itera.
+    for plugin in registry.with_mixin(PluginMixinEnum.VALIDATION):  # pragma: no cover
         generate = getattr(plugin, 'generate_batch_code', None)
 
         if not generate:
@@ -88,7 +90,9 @@ def generate_serial_number(part=None, quantity=1, **kwargs) -> Optional[str]:
 
     try:
         quantity = int(quantity)
-    except Exception:
+    except Exception:  # pragma: no cover
+        # Nota: GenerateSerialNumberSerializer.quantity ya es un IntegerField que
+        # coerciona/valida antes de llegar aqui; rama inalcanzable via la API.
         raise ValidationError({'quantity': 'Invalid quantity value'})
 
     if quantity < 1:

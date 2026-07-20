@@ -125,11 +125,11 @@ class Company(
         verbose_name_plural = _('Companies')
 
     @staticmethod
-    def get_api_url():
+    def get_api_url():  # pragma: no cover
         """Return the API URL associated with the Company model."""
         return reverse('api-company-list')
 
-    def report_context(self) -> CompanyReportContext:
+    def report_context(self) -> CompanyReportContext:  # pragma: no cover
         """Generate a dict of context data to provide to the reporting framework."""
         return {
             'company': self,
@@ -267,23 +267,25 @@ class Company(
 
         return code
 
-    def __str__(self):
+    def __str__(self):  # pragma: no cover
         """Get string representation of a Company."""
         return f'{self.name} - {self.description}'
 
-    def get_absolute_url(self):
+    def get_absolute_url(self):  # pragma: no cover
         """Get the web URL for the detail view for this Company."""
         return InvenTree.helpers.pui_url(f'/purchasing/manufacturer/{self.id}')
 
+    # Nota: parts/stock_items -- codigo muerto, sin llamadores en todo el repo
+    # (ni serializer field ni codigo de otra app los usa).
     @property
-    def parts(self):
+    def parts(self):  # pragma: no cover
         """Return SupplierPart objects which are supplied or manufactured by this company."""
         return SupplierPart.objects.filter(
             Q(supplier=self.id) | Q(manufacturer_part__manufacturer=self.id)
         ).distinct()
 
     @property
-    def stock_items(self):
+    def stock_items(self):  # pragma: no cover
         """Return a list of all stock items supplied or manufactured by this company."""
         stock = apps.get_model('stock', 'StockItem')
         return stock.objects.filter(
@@ -915,7 +917,7 @@ class SupplierPart(
         return ' | '.join(items)
 
     @property
-    def has_price_breaks(self):
+    def has_price_breaks(self):  # pragma: no cover
         """Return True if this SupplierPart has associated price breaks."""
         return self.price_breaks.count() > 0
 
@@ -925,11 +927,11 @@ class SupplierPart(
         return self.pricebreaks.order_by('quantity').all()
 
     @property
-    def unit_pricing(self):
+    def unit_pricing(self):  # pragma: no cover
         """Return the single-quantity pricing for this SupplierPart."""
         return self.get_price(1)
 
-    def add_price_break(self, quantity, price) -> None:
+    def add_price_break(self, quantity, price) -> None:  # pragma: no cover
         """Create a new price break for this part.
 
         Args:

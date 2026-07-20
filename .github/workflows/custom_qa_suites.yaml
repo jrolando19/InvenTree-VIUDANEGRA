@@ -72,10 +72,10 @@ jobs:
       # ese composite action solo existe si se clonó/copió el árbol COMPLETO
       # de InvenTree. Como este workflow puede vivir en una copia parcial del
       # repo (solo las carpetas de pruebas + CI), se evita esa dependencia.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python ${{ env.python_version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.python_version }}
           cache: pip
@@ -117,7 +117,7 @@ jobs:
 
       - name: Subir evidencia (screenshots + resultados JSON)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test_output
           path: test_output/
@@ -125,7 +125,7 @@ jobs:
 
       - name: Subir datos crudos de coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-data
           path: .coverage*

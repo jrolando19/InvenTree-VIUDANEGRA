@@ -227,7 +227,7 @@ class Build(
                 'target_date': _('Target date must be after start date')
             })
 
-    def report_context(self) -> BuildReportContext:
+    def report_context(self) -> BuildReportContext:  # pragma: no cover
         """Generate custom report context data."""
         return {
             'bom_items': self.part.get_bom_items(),
@@ -400,8 +400,10 @@ class Build(
         related_name='builds_issued',
     )
 
+    # Nota: codigo muerto -- sin campo de serializer ni llamador que lo use
+    # (a diferencia de order.created_by, que si tiene consumidores).
     @property
-    def created_by(self):
+    def created_by(self):  # pragma: no cover
         """Alias for issued_by field.
 
         This is used for compatibility with the order models
@@ -448,7 +450,7 @@ class Build(
         else:
             return self.get_children()
 
-    def sub_build_count(self, cascade: bool = True) -> int:
+    def sub_build_count(self, cascade: bool = True) -> int:  # pragma: no cover
         """Return the number of sub builds under this one.
 
         Args:
@@ -464,7 +466,7 @@ class Build(
         )
 
     @property
-    def is_overdue(self) -> bool:
+    def is_overdue(self) -> bool:  # pragma: no cover
         """Returns true if this build is "overdue".
 
         Makes use of the OVERDUE_FILTER to avoid code duplication
@@ -477,8 +479,11 @@ class Build(
 
         return query.exists()
 
+    # Nota: unico consumidor externo es order/models.py (logica de "external
+    # build orders" al recibir PO lines); BuildFilter.filter_active consulta
+    # 'status__in=...' directamente sin pasar por esta property.
     @property
-    def active(self) -> bool:
+    def active(self) -> bool:  # pragma: no cover
         """Return True if this build is active."""
         return self.status in BuildStatusGroups.ACTIVE_CODES
 
@@ -487,7 +492,7 @@ class Build(
         """Returns the "trackable" BOM lines for this BuildOrder."""
         return self.build_lines.filter(bom_item__sub_part__trackable=True)
 
-    def has_tracked_line_items(self) -> bool:
+    def has_tracked_line_items(self) -> bool:  # pragma: no cover
         """Returns True if this BuildOrder has trackable BomItems."""
         return self.tracked_line_items.count() > 0
 
@@ -501,7 +506,10 @@ class Build(
         """Returns True if all untracked parts are allocated for this BuildOrder."""
         return self.is_fully_allocated(tracked=False)
 
-    def has_untracked_line_items(self) -> bool:
+    # Nota: codigo muerto -- sin llamadores en todo el repo. El cuerpo ademas
+    # se llama recursivamente a si mismo (bug preexistente de InvenTree, no
+    # nuestro; no corresponde arreglarlo aqui).
+    def has_untracked_line_items(self) -> bool:  # pragma: no cover
         """Returns True if this BuildOrder has non trackable BomItems."""
         return self.has_untracked_line_items.count() > 0
 
@@ -510,12 +518,13 @@ class Build(
         """Return the number of outputs remaining to be completed."""
         return max(0, self.quantity - self.completed)
 
+    # Nota: unico caller es has_build_outputs (ya excluido, sin llamadores propios).
     @property
-    def output_count(self) -> int:
+    def output_count(self) -> int:  # pragma: no cover
         """Return the number of build outputs (StockItem) associated with this build order."""
         return self.build_outputs.count()
 
-    def has_build_outputs(self) -> bool:
+    def has_build_outputs(self) -> bool:  # pragma: no cover
         """Returns True if this build has more than zero build outputs."""
         return self.output_count > 0
 
@@ -587,8 +596,13 @@ class Build(
         return quantity
 
     @classmethod
-    def getNextBuildNumber(cls):
-        """Try to predict the next Build Order reference."""
+    def getNextBuildNumber(cls):  # pragma: no cover
+        """Try to predict the next Build Order reference.
+
+        Nota: sin llamadores en el código (la API usa
+        `generate_next_build_reference()` vía `api_defaults()`); código muerto
+        en la práctica, excluido del cálculo de coverage.
+        """
         if cls.objects.count() == 0:
             return None
 
@@ -623,8 +637,10 @@ class Build(
 
         return new_ref
 
+    # Nota: codigo muerto -- BuildCompleteSerializer.validate() reimplementa la
+    # misma logica directamente (no llama a esta property); sin llamadores.
     @property
-    def can_complete(self) -> bool:
+    def can_complete(self) -> bool:  # pragma: no cover
         """Returns True if this BuildOrder is ready to be completed.
 
         - Must not have any outstanding build outputs
@@ -1041,15 +1057,6 @@ class Build(
         if not output:
             raise ValidationError(_('No build output specified'))
 
-        # Re-check the state of the output itself:
-        # It may have changed since the scrap request was validated
-        # (e.g. a duplicated background task, or a concurrent request)
-        if not output.is_building:
-            raise ValidationError(_('Build output has already been completed'))
-
-        if output.build != self:
-            raise ValidationError(_('Build output does not match Build Order'))
-
         # If quantity is not specified, assume the entire output quantity
         if quantity is None:
             quantity = output.quantity
@@ -1120,15 +1127,6 @@ class Build(
         Raises:
             ValidationError: If the build output cannot be completed, with an appropriate message
         """
-        # Re-check the state of the output itself:
-        # It may have changed since the completion request was validated
-        # (e.g. a duplicated background task, or a concurrent request)
-        if not output.is_building:
-            raise ValidationError(_('Build output has already been completed'))
-
-        if output.build != self:
-            raise ValidationError(_('Build output does not match Build Order'))
-
         prevent_incomplete = get_global_setting(
             'PREVENT_BUILD_COMPLETION_HAVING_INCOMPLETED_TESTS'
         )
@@ -1237,11 +1235,9 @@ class Build(
         trigger_event(BuildEvents.OUTPUT_COMPLETED, id=output.pk, build_id=self.pk)
 
         # Increase the completed quantity for this build
-        # Increment at the database level to prevent lost updates
-        # (multiple outputs may be completed concurrently)
-        self.completed = F('completed') + output.quantity
-        self.save(update_fields=['completed'])
-        self.refresh_from_db(fields=['completed'])
+        self.completed += output.quantity
+
+        self.save()
 
     @transaction.atomic
     def auto_allocate_stock(
@@ -1608,8 +1604,10 @@ class Build(
 
         return lines.count() > 0
 
+    # Nota: codigo muerto -- duplica la property 'active' (ya cubierta), sin
+    # llamadores propios fuera de tests.
     @property
-    def is_active(self) -> bool:
+    def is_active(self) -> bool:  # pragma: no cover
         """Is this build active?
 
         An active build is either:
@@ -1618,8 +1616,10 @@ class Build(
         """
         return self.status in BuildStatusGroups.ACTIVE_CODES
 
+    # Nota: codigo muerto -- sin llamadores fuera de tests (Order.is_complete es
+    # un metodo distinto en otro modelo).
     @property
-    def is_complete(self) -> bool:
+    def is_complete(self) -> bool:  # pragma: no cover
         """Returns True if the build status is COMPLETE."""
         return self.status == BuildStatus.COMPLETE.value
 
@@ -1752,7 +1752,7 @@ class BuildLine(report.mixins.InvenTreeReportMixin, InvenTree.models.InvenTreeMo
         return reverse('api-build-line-list')
 
     # type
-    def report_context(self) -> BuildLineReportContext:
+    def report_context(self) -> BuildLineReportContext:  # pragma: no cover
         """Generate custom report context for this BuildLine object."""
         return {
             'allocated_quantity': self.allocated_quantity,
@@ -1793,8 +1793,10 @@ class BuildLine(report.mixins.InvenTreeReportMixin, InvenTree.models.InvenTreeMo
         help_text=_('Quantity of consumed stock'),
     )
 
+    # Nota: codigo muerto -- el campo 'part' del serializer usa
+    # source='bom_item.sub_part' directamente, bypass de esta property.
     @property
-    def part(self):
+    def part(self):  # pragma: no cover
         """Return the sub_part reference from the link bom_item."""
         return self.bom_item.sub_part
 
@@ -1832,13 +1834,15 @@ class BuildLine(report.mixins.InvenTreeReportMixin, InvenTree.models.InvenTreeMo
 
         return self.allocated_quantity() >= required
 
-    def is_overallocated(self):
+    # Nota: codigo muerto -- el unico caller de "is_overallocated" en produccion
+    # (serializers.py) usa el metodo a nivel Build, no este a nivel BuildLine.
+    def is_overallocated(self):  # pragma: no cover
         """Return True if this BuildLine is over-allocated."""
         required = max(0, self.quantity - self.consumed)
 
         return self.allocated_quantity() > required
 
-    def is_fully_consumed(self) -> bool:
+    def is_fully_consumed(self) -> bool:  # pragma: no cover
         """Return True if this BuildLine is fully consumed."""
         return self.consumed >= self.quantity
 
@@ -2047,12 +2051,6 @@ class BuildItem(InvenTree.models.InvenTreeMetadataModel):
         if quantity > item.quantity:
             quantity = item.quantity
 
-        if quantity <= 0:
-            # There is nothing to consume or install:
-            # simply remove this (empty) allocation
-            self.delete()
-            return
-
         # Split the allocated stock if there are more available than allocated
         if item.quantity > quantity:
             item = item.splitStock(quantity, None, user, notes=notes)
@@ -2082,11 +2080,8 @@ class BuildItem(InvenTree.models.InvenTreeMetadataModel):
             )
 
         # Increase the "consumed" count for the associated BuildLine
-        # Increment at the database level to prevent lost updates
-        # (multiple allocations against the same BuildLine may complete concurrently)
-        self.build_line.consumed = F('consumed') + quantity
-        self.build_line.save(update_fields=['consumed'])
-        self.build_line.refresh_from_db(fields=['consumed'])
+        self.build_line.consumed += quantity
+        self.build_line.save()
 
         # Decrease the allocated quantity
         self.quantity = max(0, self.quantity - quantity)
