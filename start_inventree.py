@@ -29,6 +29,9 @@ if not os.path.isfile(VENV_PY):
     # Sin venv local (p. ej. en CI, donde las dependencias se instalan
     # directo al Python del sistema): usar el intérprete actual.
     VENV_PY = sys.executable
+INVOKE_BIN = os.path.join(BASE_DIR, "dev", "venv", "bin", "invoke")
+if not os.path.isfile(INVOKE_BIN):
+    INVOKE_BIN = "invoke"
 MANAGE     = os.path.join(BASE_DIR, "src", "backend", "InvenTree", "manage.py")
 SRC_DIR    = os.path.join(BASE_DIR, "src", "backend", "InvenTree")
 PID_FILE   = os.path.join(BASE_DIR, ".inventree_server.pid")
@@ -78,6 +81,14 @@ SUITE_TO_MODULE = {f: key for key, f, _desc in FUNCTIONAL_SUITES}
 # data_exporter no tienen RF asociado y no cuentan para el total.
 RF_MODULES = ["part", "stock", "order", "build", "company", "users"]
 RF_INCLUDE = [f"*/src/backend/InvenTree/{m}/*" for m in RF_MODULES]
+
+# Pruebas internas de InvenTree (Django TestCase / unittest), las mismas que
+# corre `invoke dev.test` en el CI oficial (qc_checks.yaml) -- no son las
+# suites propias del Hito 2: viven adentro del código fuente de InvenTree
+# (ej. src/backend/InvenTree/part/test_*.py), corren con el test-runner de
+# Django (base de datos de prueba propia, sin servidor real) y no se tocaron
+# ni un poquito -- esto solo agrega una forma cómoda de invocarlas.
+INTERNAL_TEST_APPS = [(m, m, f"tests internos de Django del módulo {m}") for m in RF_MODULES]
 
 # ── colores ──────────────────────────────────────────────────────
 OK   = "\033[92m✅\033[0m"
@@ -519,6 +530,31 @@ def run_system_tests_menu():
     )
 
 
+def run_internal_tests_menu():
+    """Submenú de las pruebas INTERNAS de InvenTree (Django TestCase / unittest,
+    `invoke dev.test`) -- no las suites propias del Hito 2. Django arma su
+    propia base de datos de prueba, así que no hace falta nuestro servidor
+    corriendo. Se puede acotar a un solo módulo (rápido) o correr los 6
+    módulos de RF juntos (lento: son cientos de tests por módulo)."""
+    selection = show_suite_submenu(INTERNAL_TEST_APPS, "Pruebas internas de InvenTree (Django TestCase)")
+    if selection is None:
+        return
+
+    print(f"\n{'═'*60}")
+    if len(selection) > 1:
+        print("  EJECUTANDO TESTS INTERNOS DE INVENTREE — 6 módulos de RF (puede tardar varios minutos)")
+    else:
+        print(f"  EJECUTANDO TESTS INTERNOS DE INVENTREE: {selection[0]}")
+    print('═'*60)
+
+    cmd = [INVOKE_BIN, "dev.test", "--check", f"--runtest={' '.join(selection)}"]
+    result = subprocess.run(cmd, cwd=BASE_DIR)
+
+    print(f"\n{'═'*60}")
+    print(f"  {OK if result.returncode == 0 else FAIL}  Tests internos: {'OK' if result.returncode == 0 else 'con errores'}")
+    print('═'*60)
+
+
 MENU_OPTIONS = {
     "1": ("Iniciar servidor (sin pruebas)",
           {"action": "server", "setup": False}),
@@ -532,6 +568,8 @@ MENU_OPTIONS = {
           {"action": "system_tests"}),
     "6": ("Solo inicializar datos de prueba (sin iniciar servidor)",
           {"action": "setup_only"}),
+    "7": ("Pruebas internas de InvenTree (Django TestCase, invoke dev.test)",
+          {"action": "internal_tests"}),
 }
 
 
@@ -548,7 +586,7 @@ def show_menu():
         print("  0) Salir")
         print('═'*60)
 
-        choice = input("\n  Elige una opción [0-6]: ").strip()
+        choice = input("\n  Elige una opción [0-7]: ").strip()
 
         if choice == "0":
             return None
@@ -632,6 +670,14 @@ def run_once(args, action):
                 stop_server_pid(pid)
                 sys.exit(1)
         run_system_tests_menu()
+        print()
+        return
+
+    # 2.65. Menú: pruebas INTERNAS de InvenTree (Django TestCase, invoke
+    # dev.test) — Django arma su propia base de datos de prueba, así que a
+    # diferencia de las demás opciones acá NO hace falta levantar el servidor.
+    if action == "internal_tests":
+        run_internal_tests_menu()
         print()
         return
 
