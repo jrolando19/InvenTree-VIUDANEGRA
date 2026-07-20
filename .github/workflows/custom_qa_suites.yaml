@@ -15,7 +15,7 @@
 #     ├─ test_modulos (puerta) -> part, stock, order, build, company, users
 #     └─ test_sistema (puerta) -> integracion, golden_path, seguridad, desempeno
 
-name: Custom QA Suites
+name: Test ViudaNegra
 
 on:
   push:
